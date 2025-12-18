@@ -1,0 +1,22 @@
+# Build artifacts
+build/
+*.o
+moc_*.cpp
+moc_*.o
+qrc_*.cpp
+qrc_*.o
+moc_predefs.h
+.qmake.stash
+Makefile
+
+# Executables
+qt-hearts
+hearts
+
+# IDE
+.vscode/
+.idea/
+*.pro.user
+
+# Claude
+.claude/
