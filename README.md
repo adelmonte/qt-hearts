@@ -2,6 +2,8 @@
 
 A classic Hearts card game built with Qt6.
 
+![screenshot](demo.png)
+
 ## Features
 
 - Single player against 3 AI opponents
