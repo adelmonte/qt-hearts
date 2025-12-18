@@ -1,0 +1,22 @@
+Sound Effects for Hearts
+========================
+
+Place the following OGG sound files in this directory:
+
+- card-pickup.ogg  - Sound when picking up a card
+- card-down.ogg    - Sound when placing a card
+- card-shuffle.ogg - Sound when shuffling/dealing cards
+- win.ogg          - Sound when winning a game
+- lose.ogg         - Sound when losing a game
+
+You can copy sounds from KPatience:
+  /usr/share/kpat/sounds/
+
+Or find free sounds at:
+  - https://freesound.org/
+  - https://opengameart.org/
+
+The sounds should be installed to one of:
+  - ./sounds/ (next to executable)
+  - /usr/share/hearts/sounds/
+  - ~/.local/share/hearts/sounds/

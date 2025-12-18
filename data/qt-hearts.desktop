@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Hearts
+GenericName=Card Game
+Comment=Classic hearts card game
+Exec=qt-hearts
+Icon=qt-hearts
+Terminal=false
+Categories=Game;CardGame;Qt;
+Keywords=cards;hearts;card game;
+StartupNotify=true
