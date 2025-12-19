@@ -102,6 +102,7 @@ private:
     Cards m_selectedPassCards;
     Cards m_receivedCards;  // Cards received from passing
     bool m_inputBlocked;
+    bool m_showingReceivedCards;  // True while received cards are highlighted
     QTimer* m_receivedHighlightTimer;
 
     // Sizes

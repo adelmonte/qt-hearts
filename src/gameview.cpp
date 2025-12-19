@@ -18,6 +18,7 @@ GameView::GameView(QWidget* parent)
     , m_overlay(nullptr)
     , m_overlayText(nullptr)
     , m_inputBlocked(false)
+    , m_showingReceivedCards(false)
     , m_receivedHighlightTimer(nullptr)
     , m_cardWidth(80)
     , m_cardHeight(116)
@@ -290,6 +291,15 @@ void GameView::updateOpponentHands() {
 void GameView::updatePlayableCards() {
     if (!m_game) return;
 
+    // Never unblock input while showing received cards
+    if (m_showingReceivedCards) {
+        m_inputBlocked = true;
+        for (CardItem* item : m_playerCards) {
+            item->setPlayable(false);
+        }
+        return;
+    }
+
     GameState state = m_game->state();
     Cards valid;
 
@@ -305,6 +315,9 @@ void GameView::updatePlayableCards() {
     if (state == GameState::WaitingForPlay && m_game->currentPlayer() == 0) {
         valid = m_game->getValidPlays();
         m_inputBlocked = false;  // Unblock input when it's player's turn
+    } else {
+        // Block input during non-interactive states (AI turns, transitions, etc.)
+        m_inputBlocked = true;
     }
 
     for (CardItem* item : m_playerCards) {
@@ -453,6 +466,10 @@ void GameView::onPassingComplete(Cards receivedCards) {
     hidePassArrow();
     m_selectedPassCards.clear();
 
+    // Block input during received card highlight period
+    m_inputBlocked = true;
+    m_showingReceivedCards = true;
+
     // Clear any old received cards first
     m_receivedCards.clear();
 
@@ -466,19 +483,36 @@ void GameView::onPassingComplete(Cards receivedCards) {
     // First, clear ALL received flags to ensure clean state
     for (CardItem* item : m_playerCards) {
         item->setReceived(false);
+        item->setSelected(false);  // Also clear any stale selection state
     }
 
     // Highlight exactly the received cards with golden glow - max 3
+    // Also animate them pushing out momentarily
+    QVector<CardItem*> receivedItems;
     int highlightCount = 0;
     for (int i = 0; i < m_playerCards.size() && highlightCount < 3; ++i) {
         CardItem* item = m_playerCards[i];
         for (const Card& rc : m_receivedCards) {
             if (item->card().suit() == rc.suit() && item->card().rank() == rc.rank()) {
                 item->setReceived(true);
+                receivedItems.append(item);
                 highlightCount++;
                 break;
             }
         }
+    }
+
+    // Animate received cards pushing out (up)
+    for (CardItem* item : receivedItems) {
+        QPointF startPos = item->pos();
+        QPointF pushedPos = startPos - QPointF(0, 20);  // Push up 20 pixels
+
+        QPropertyAnimation* pushUp = new QPropertyAnimation(item, "pos");
+        pushUp->setDuration(200);
+        pushUp->setStartValue(startPos);
+        pushUp->setEndValue(pushedPos);
+        pushUp->setEasingCurve(QEasingCurve::OutCubic);
+        pushUp->start(QAbstractAnimation::DeleteWhenStopped);
     }
 
     // Show message about received cards
@@ -492,8 +526,25 @@ void GameView::onPassingComplete(Cards receivedCards) {
 }
 
 void GameView::clearReceivedCardHighlight() {
+    // Animate received cards sliding back into position
     for (CardItem* item : m_playerCards) {
+        if (item->isReceived()) {
+            // Calculate the proper position in the hand layout
+            int index = m_playerCards.indexOf(item);
+            QRectF rect = m_scene->sceneRect();
+            qreal totalWidth = m_playerCards.size() * m_cardSpacing + m_cardWidth - m_cardSpacing;
+            qreal startX = (rect.width() - totalWidth) / 2;
+            qreal y = rect.height() - m_cardHeight - 30;
+            QPointF targetPos(startX + index * m_cardSpacing, y);
+
+            QPropertyAnimation* slideBack = new QPropertyAnimation(item, "pos");
+            slideBack->setDuration(200);
+            slideBack->setEndValue(targetPos);
+            slideBack->setEasingCurve(QEasingCurve::OutCubic);
+            slideBack->start(QAbstractAnimation::DeleteWhenStopped);
+        }
         item->setReceived(false);
+        item->setSelected(false);  // Ensure no stale selection state
     }
     m_receivedCards.clear();
     hideMessage();
@@ -502,6 +553,10 @@ void GameView::clearReceivedCardHighlight() {
         m_receivedHighlightTimer->deleteLater();
         m_receivedHighlightTimer = nullptr;
     }
+
+    // Clear the received cards display flag and update playable cards
+    m_showingReceivedCards = false;
+    updatePlayableCards();
 }
 
 void GameView::onUndoPerformed() {
