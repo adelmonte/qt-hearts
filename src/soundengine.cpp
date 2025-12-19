@@ -14,9 +14,9 @@ SoundEngine::SoundEngine(QObject* parent)
         QCoreApplication::applicationDirPath() + "/data/sounds",
         QCoreApplication::applicationDirPath() + "/sounds",
         QCoreApplication::applicationDirPath() + "/../data/sounds",
-        QCoreApplication::applicationDirPath() + "/../share/hearts/sounds",
-        "/usr/share/hearts/sounds",
-        "/usr/local/share/hearts/sounds",
+        QCoreApplication::applicationDirPath() + "/../share/qt-hearts/sounds",
+        "/usr/share/qt-hearts/sounds",
+        "/usr/local/share/qt-hearts/sounds",
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/sounds"
     };
 
