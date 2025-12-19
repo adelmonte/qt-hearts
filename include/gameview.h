@@ -103,6 +103,7 @@ private:
     Cards m_receivedCards;  // Cards received from passing
     bool m_inputBlocked;
     bool m_showingReceivedCards;  // True while received cards are highlighted
+    bool m_passConfirmed;  // True after 3 cards confirmed, until next round
     QTimer* m_receivedHighlightTimer;
 
     // Sizes

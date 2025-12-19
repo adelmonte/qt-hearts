@@ -19,6 +19,7 @@ GameView::GameView(QWidget* parent)
     , m_overlayText(nullptr)
     , m_inputBlocked(false)
     , m_showingReceivedCards(false)
+    , m_passConfirmed(false)
     , m_receivedHighlightTimer(nullptr)
     , m_cardWidth(80)
     , m_cardHeight(116)
@@ -304,6 +305,15 @@ void GameView::updatePlayableCards() {
     Cards valid;
 
     if (state == GameState::WaitingForPass) {
+        // Check if passing is already confirmed (prevents race condition where
+        // clearReceivedCardHighlight runs before startPlaying)
+        if (m_passConfirmed) {
+            m_inputBlocked = true;
+            for (CardItem* item : m_playerCards) {
+                item->setPlayable(false);
+            }
+            return;
+        }
         // All cards playable for selection
         m_inputBlocked = false;
         for (CardItem* item : m_playerCards) {
@@ -447,6 +457,7 @@ void GameView::onStateChanged(GameState state) {
 
 void GameView::onCardsDealt() {
     m_selectedPassCards.clear();
+    m_passConfirmed = false;
     updateCards();
 }
 
@@ -605,23 +616,20 @@ void GameView::onCardPlayed(int player, Card card) {
         for (int i = 0; i < m_playerCards.size(); ++i) {
             if (m_playerCards[i]->card() == card) {
                 CardItem* item = m_playerCards.takeAt(i);
+                QPointF startPos = item->pos();  // Remember hand position before any changes
                 item->resetVisualState();  // Clear hover/selected/playable state
                 item->setFaceUp(true);
                 item->setInTrick(true);  // Mark as in trick (prevents dimming)
                 item->setZValue(200 + m_trickCards.size());
                 item->setRotation(0);
+                item->setOpacity(1.0);  // Ensure full opacity
                 m_trickCards.append(item);
 
-                // Set position immediately to avoid rendering glitches on rapid clicking
+                // Animate from hand position to trick area
                 QPointF dest = trickCardPosition(player);
-                item->setPos(dest);
-                item->setOpacity(1.0);  // Ensure full opacity
-                item->update();  // Force immediate repaint
-
-                // Animate from current position (already set, so animation is smooth)
                 QPropertyAnimation* anim = new QPropertyAnimation(item, "pos");
                 anim->setDuration(200);
-                anim->setStartValue(item->pos());
+                anim->setStartValue(startPos);
                 anim->setEndValue(dest);
                 anim->start(QAbstractAnimation::DeleteWhenStopped);
                 break;
@@ -656,12 +664,18 @@ void GameView::onTrickWon(int winner, int points) {
     QString name = m_game->player(winner)->name();
     showMessage(name + " wins trick" + (points > 0 ? QString(" (+%1)").arg(points) : ""), 1500);
 
+    // Move trick cards to a separate list for cleanup to avoid race condition
+    // where rapid clicking causes a new card to be added to m_trickCards
+    // before the animation cleanup runs
+    QVector<CardItem*> cardsToAnimate = m_trickCards;
+    m_trickCards.clear();
+
     // Animate cards away
     QPointF dest = scoreboardPosition(winner);
 
     QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
 
-    for (CardItem* item : m_trickCards) {
+    for (CardItem* item : cardsToAnimate) {
         QPropertyAnimation* moveAnim = new QPropertyAnimation(item, "pos");
         moveAnim->setDuration(300);
         moveAnim->setEndValue(dest);
@@ -673,12 +687,12 @@ void GameView::onTrickWon(int winner, int points) {
         group->addAnimation(opacityAnim);
     }
 
-    connect(group, &QParallelAnimationGroup::finished, this, [this]() {
-        for (CardItem* item : m_trickCards) {
+    connect(group, &QParallelAnimationGroup::finished, this, [cardsToAnimate, this]() {
+        for (CardItem* item : cardsToAnimate) {
             m_scene->removeItem(item);
             delete item;
         }
-        m_trickCards.clear();
+        // Don't clear m_trickCards - it may already have new cards from rapid play
     });
 
     group->start(QAbstractAnimation::DeleteWhenStopped);
@@ -752,6 +766,7 @@ void GameView::onCardClicked(CardItem* item) {
         if (m_selectedPassCards.size() == 3) {
             // Block all further input
             m_inputBlocked = true;
+            m_passConfirmed = true;
             for (CardItem* c : m_playerCards) {
                 c->setPlayable(false);
             }
