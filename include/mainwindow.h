@@ -57,6 +57,11 @@ private:
     AIDifficulty m_aiDifficulty;
     GameRules m_gameRules;
 
+    // Animation settings
+    bool m_animateCardRotation;
+    bool m_animateAICards;
+    bool m_animatePassingCards;
+
     // Statistics
     int m_gamesPlayed;
     int m_gamesWon;

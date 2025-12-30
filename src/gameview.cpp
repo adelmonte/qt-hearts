@@ -5,6 +5,8 @@
 #include <QTimer>
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
+#include <QSequentialAnimationGroup>
+#include <QRandomGenerator>
 #include <cmath>
 
 GameView::GameView(QWidget* parent)
@@ -17,6 +19,7 @@ GameView::GameView(QWidget* parent)
     , m_passArrow(nullptr)
     , m_overlay(nullptr)
     , m_overlayText(nullptr)
+    , m_currentPassDirection(PassDirection::None)
     , m_inputBlocked(false)
     , m_showingReceivedCards(false)
     , m_passConfirmed(false)
@@ -26,6 +29,9 @@ GameView::GameView(QWidget* parent)
     , m_cardHeight(116)
     , m_cardSpacing(22)
     , m_cardScale(1.0)
+    , m_animateCardRotation(true)
+    , m_animateAICards(true)
+    , m_animatePassingCards(true)
 {
     setScene(m_scene);
     setRenderHint(QPainter::Antialiasing);
@@ -135,6 +141,12 @@ void GameView::setCardScale(qreal scale) {
     resizeEvent(&event);
 }
 
+void GameView::setAnimationSettings(bool cardRotation, bool aiCards, bool passingCards) {
+    m_animateCardRotation = cardRotation;
+    m_animateAICards = aiCards;
+    m_animatePassingCards = passingCards;
+}
+
 void GameView::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
 
@@ -172,6 +184,11 @@ void GameView::resizeEvent(QResizeEvent* event) {
     layoutCards();
     layoutScoreboards();
     layoutTrickCards();  // Also relayout trick cards on resize
+
+    // Schedule a delayed relayout to correct any cards that were mid-animation
+    QTimer::singleShot(250, this, [this]() {
+        layoutTrickCards();
+    });
 }
 
 void GameView::drawBackground(QPainter* painter, const QRectF& rect) {
@@ -184,25 +201,30 @@ void GameView::drawBackground(QPainter* painter, const QRectF& rect) {
 }
 
 void GameView::clearCards() {
-    for (CardItem* item : m_playerCards) {
-        m_scene->removeItem(item);
-        delete item;
-    }
+    // Clear tracked card vectors
     m_playerCards.clear();
-
+    m_trickCards.clear();
     for (auto& hand : m_opponentCards) {
-        for (CardItem* item : hand) {
-            m_scene->removeItem(item);
-            delete item;
-        }
         hand.clear();
     }
 
-    for (CardItem* item : m_trickCards) {
-        m_scene->removeItem(item);
-        delete item;
+    // Remove ALL CardItem objects from the scene (including orphaned animated cards)
+    // CardItem inherits from QGraphicsObject, so we can use qobject_cast
+    QList<QGraphicsItem*> items = m_scene->items();
+    QList<CardItem*> cardsToDelete;
+    for (QGraphicsItem* item : items) {
+        QGraphicsObject* obj = item->toGraphicsObject();
+        if (obj) {
+            CardItem* card = qobject_cast<CardItem*>(obj);
+            if (card) {
+                cardsToDelete.append(card);
+            }
+        }
     }
-    m_trickCards.clear();
+    for (CardItem* card : cardsToDelete) {
+        m_scene->removeItem(card);
+        delete card;
+    }
 }
 
 CardItem* GameView::createCardItem(const Card& card) {
@@ -360,7 +382,7 @@ void GameView::layoutCards() {
     }
 }
 
-void GameView::layoutPlayerHand() {
+void GameView::layoutPlayerHand(bool animate) {
     if (m_playerCards.isEmpty()) return;
 
     QRectF rect = m_scene->sceneRect();
@@ -369,8 +391,18 @@ void GameView::layoutPlayerHand() {
     qreal y = rect.height() - m_cardHeight - 30;
 
     for (int i = 0; i < m_playerCards.size(); ++i) {
-        m_playerCards[i]->setPos(startX + i * m_cardSpacing, y);
+        QPointF targetPos(startX + i * m_cardSpacing, y);
         m_playerCards[i]->setZValue(10 + i);
+
+        if (animate && m_playerCards[i]->pos() != targetPos) {
+            QPropertyAnimation* anim = new QPropertyAnimation(m_playerCards[i], "pos");
+            anim->setDuration(150);
+            anim->setEndValue(targetPos);
+            anim->setEasingCurve(QEasingCurve::OutCubic);
+            anim->start(QAbstractAnimation::DeleteWhenStopped);
+        } else {
+            m_playerCards[i]->setPos(targetPos);
+        }
     }
 }
 
@@ -459,6 +491,20 @@ QPointF GameView::trickCardPosition(int player) const {
     return QPointF(cx, cy);
 }
 
+QPointF GameView::opponentHandCenter(int player) const {
+    QRectF rect = m_scene->sceneRect();
+
+    switch (player) {
+        case 1: // West (left side)
+            return QPointF(20 + m_cardHeight, rect.height() / 2);
+        case 2: // North (top)
+            return QPointF(rect.width() / 2, 20 + m_cardHeight);
+        case 3: // East (right side)
+            return QPointF(rect.width() - 20, rect.height() / 2);
+    }
+    return rect.center();
+}
+
 void GameView::onStateChanged(GameState state) {
     // Block input during all non-interactive states
     if (state != GameState::WaitingForPass && state != GameState::WaitingForPlay) {
@@ -469,6 +515,7 @@ void GameView::onStateChanged(GameState state) {
         clearCards();
         m_overlay->setVisible(false);
         m_overlayText->setVisible(false);
+        updateCurrentPlayerHighlight(-1);  // Clear highlight when not playing
     }
     updatePlayableCards();
 }
@@ -476,10 +523,22 @@ void GameView::onStateChanged(GameState state) {
 void GameView::onCardsDealt() {
     m_selectedPassCards.clear();
     m_passConfirmed = false;
+
+    // Cancel any pending highlight timer
+    if (m_receivedHighlightTimer) {
+        m_receivedHighlightTimer->stop();
+        delete m_receivedHighlightTimer;
+        m_receivedHighlightTimer = nullptr;
+    }
+    m_showingReceivedCards = false;
+    m_inputBlocked = false;
+
+    // Note: clearCards() already called by onStateChanged(Dealing)
     updateCards();
 }
 
 void GameView::onPassDirectionAnnounced(PassDirection dir) {
+    m_currentPassDirection = dir;
     if (dir == PassDirection::None) {
         showMessage("No passing this round - Hold", 1500);
         return;
@@ -535,17 +594,98 @@ void GameView::onPassingComplete(Cards receivedCards) {
         }
     }
 
-    // Animate received cards pushing out (up)
-    for (CardItem* item : receivedItems) {
-        QPointF startPos = item->pos();
-        QPointF pushedPos = startPos - QPointF(0, 20);  // Push up 20 pixels
+    // Animate received cards being thrown from the opponent's hand, then push up
+    if (m_animatePassingCards && !receivedItems.isEmpty()) {
+        // Determine which opponent we receive from based on pass direction
+        // Pass Left: we pass to player 1 (West), receive from player 3 (East)
+        // Pass Right: we pass to player 3 (East), receive from player 1 (West)
+        // Pass Across: we pass to player 2 (North), receive from player 2 (North)
+        int fromPlayer = 2;  // Default to North
+        qreal startRotation = 180;  // North cards are rotated 180
+        switch (m_currentPassDirection) {
+            case PassDirection::Left:
+                fromPlayer = 3;  // East
+                startRotation = -90;
+                break;
+            case PassDirection::Right:
+                fromPlayer = 1;  // West
+                startRotation = 90;
+                break;
+            case PassDirection::Across:
+                fromPlayer = 2;  // North
+                startRotation = 180;
+                break;
+            default:
+                break;
+        }
 
-        QPropertyAnimation* pushUp = new QPropertyAnimation(item, "pos");
-        pushUp->setDuration(200);
-        pushUp->setStartValue(startPos);
-        pushUp->setEndValue(pushedPos);
-        pushUp->setEasingCurve(QEasingCurve::OutCubic);
-        pushUp->start(QAbstractAnimation::DeleteWhenStopped);
+        QPointF throwFrom = opponentHandCenter(fromPlayer);
+
+        for (int i = 0; i < receivedItems.size(); ++i) {
+            CardItem* item = receivedItems[i];
+            QPointF handPos = item->pos();
+            QPointF pushedPos = handPos - QPointF(0, 20);  // Push up 20 pixels
+
+            // Start card at opponent's hand position, face down
+            item->setPos(throwFrom);
+            item->setRotation(startRotation);
+            item->setFaceUp(false);
+
+            // Alternate rotation for variety
+            qreal endRotation = (i % 2 == 0) ? 5.0 : -5.0;
+
+            // Phase 1: Throw from opponent to hand position
+            QPropertyAnimation* throwAnim = new QPropertyAnimation(item, "pos");
+            throwAnim->setDuration(250);
+            throwAnim->setStartValue(throwFrom);
+            throwAnim->setEndValue(handPos);
+            throwAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            QPropertyAnimation* rotateAnim = new QPropertyAnimation(item, "rotation");
+            rotateAnim->setDuration(250);
+            rotateAnim->setStartValue(startRotation);
+            rotateAnim->setEndValue(0.0);
+            rotateAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            // Flip face up partway through
+            QTimer::singleShot(125, item, [item]() {
+                item->setFaceUp(true);
+            });
+
+            QParallelAnimationGroup* throwGroup = new QParallelAnimationGroup(this);
+            throwGroup->addAnimation(throwAnim);
+            throwGroup->addAnimation(rotateAnim);
+
+            // Phase 2: Push up to highlight (after throw completes)
+            QPropertyAnimation* pushAnim = new QPropertyAnimation(item, "pos");
+            pushAnim->setDuration(150);
+            pushAnim->setStartValue(handPos);
+            pushAnim->setEndValue(pushedPos);
+            pushAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            QPropertyAnimation* wobbleAnim = new QPropertyAnimation(item, "rotation");
+            wobbleAnim->setDuration(150);
+            wobbleAnim->setStartValue(0.0);
+            wobbleAnim->setEndValue(endRotation);
+            wobbleAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            QParallelAnimationGroup* pushGroup = new QParallelAnimationGroup(this);
+            pushGroup->addAnimation(pushAnim);
+            pushGroup->addAnimation(wobbleAnim);
+
+            // Chain: throw first, then push
+            QSequentialAnimationGroup* sequence = new QSequentialAnimationGroup(this);
+            sequence->addAnimation(throwGroup);
+            sequence->addAnimation(pushGroup);
+            sequence->start(QAbstractAnimation::DeleteWhenStopped);
+        }
+    } else if (!receivedItems.isEmpty()) {
+        // No animation - just push up
+        for (int i = 0; i < receivedItems.size(); ++i) {
+            CardItem* item = receivedItems[i];
+            QPointF pos = item->pos();
+            item->setPos(pos - QPointF(0, 20));
+        }
     }
 
     // Show message about received cards
@@ -559,7 +699,7 @@ void GameView::onPassingComplete(Cards receivedCards) {
 }
 
 void GameView::clearReceivedCardHighlight() {
-    // Animate received cards sliding back into position
+    // Move received cards back into position (animated or instant)
     for (CardItem* item : m_playerCards) {
         if (item->isReceived()) {
             // Calculate the proper position in the hand layout
@@ -570,11 +710,25 @@ void GameView::clearReceivedCardHighlight() {
             qreal y = rect.height() - m_cardHeight - 30;
             QPointF targetPos(startX + index * m_cardSpacing, y);
 
-            QPropertyAnimation* slideBack = new QPropertyAnimation(item, "pos");
-            slideBack->setDuration(200);
-            slideBack->setEndValue(targetPos);
-            slideBack->setEasingCurve(QEasingCurve::OutCubic);
-            slideBack->start(QAbstractAnimation::DeleteWhenStopped);
+            if (m_animatePassingCards) {
+                QPropertyAnimation* slideBack = new QPropertyAnimation(item, "pos");
+                slideBack->setDuration(200);
+                slideBack->setEndValue(targetPos);
+                slideBack->setEasingCurve(QEasingCurve::OutCubic);
+
+                QPropertyAnimation* rotateBack = new QPropertyAnimation(item, "rotation");
+                rotateBack->setDuration(200);
+                rotateBack->setEndValue(0.0);
+                rotateBack->setEasingCurve(QEasingCurve::OutCubic);
+
+                QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
+                group->addAnimation(slideBack);
+                group->addAnimation(rotateBack);
+                group->start(QAbstractAnimation::DeleteWhenStopped);
+            } else {
+                item->setPos(targetPos);
+                item->setRotation(0);
+            }
         }
         item->setReceived(false);
         item->setSelected(false);  // Ensure no stale selection state
@@ -643,38 +797,96 @@ void GameView::onCardPlayed(int player, Card card) {
                 item->setFaceUp(true);
                 item->setInTrick(true);  // Mark as in trick (prevents dimming)
                 item->setZValue(200 + m_trickCards.size());
-                item->setRotation(0);
                 item->setOpacity(1.0);  // Ensure full opacity
                 m_trickCards.append(item);
 
                 // Animate from hand position to trick area
                 QPointF dest = trickCardPosition(player);
-                QPropertyAnimation* anim = new QPropertyAnimation(item, "pos");
-                anim->setDuration(200);
-                anim->setStartValue(startPos);
-                anim->setEndValue(dest);
-                anim->start(QAbstractAnimation::DeleteWhenStopped);
+
+                QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
+                posAnim->setDuration(200);
+                posAnim->setStartValue(startPos);
+                posAnim->setEndValue(dest);
+
+                if (m_animateCardRotation) {
+                    qreal trickRotation = QRandomGenerator::global()->bounded(11) - 5;  // Random rotation -5 to +5 degrees
+                    QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
+                    rotAnim->setDuration(200);
+                    rotAnim->setStartValue(0.0);
+                    rotAnim->setEndValue(trickRotation);
+
+                    QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
+                    group->addAnimation(posAnim);
+                    group->addAnimation(rotAnim);
+                    group->start(QAbstractAnimation::DeleteWhenStopped);
+                } else {
+                    item->setRotation(0);
+                    posAnim->start(QAbstractAnimation::DeleteWhenStopped);
+                }
                 break;
             }
         }
-        layoutPlayerHand();
+        layoutPlayerHand(true);  // Animate remaining cards sliding together
     } else {
-        // Remove one opponent card and create the played card
+        // Remove one opponent card
+        QPointF startPos;
+        qreal startRotation = 0;
+
         if (!m_opponentCards[player].isEmpty()) {
             CardItem* old = m_opponentCards[player].takeLast();
+            startPos = old->pos();
+            startRotation = old->rotation();
             m_scene->removeItem(old);
             delete old;
+        } else {
+            // Fallback position if no cards left (shouldn't happen)
+            startPos = opponentHandCenter(player);
+            startRotation = (player == 1) ? 90 : (player == 2) ? 180 : -90;
         }
 
+        QPointF dest = trickCardPosition(player);
+        qreal endRotation = m_animateCardRotation ? (QRandomGenerator::global()->bounded(11) - 5) : 0.0;
+
         CardItem* item = createCardItem(card);
-        item->setFaceUp(true);
-        item->setInTrick(true);  // Mark as in trick (prevents dimming)
+        item->setInTrick(true);
         item->setZValue(200 + m_trickCards.size());
         m_trickCards.append(item);
 
-        QPointF dest = trickCardPosition(player);
-        item->setPos(dest);
-        item->update();  // Force immediate repaint
+        if (m_animateAICards) {
+            // Animate the played card from opponent's hand
+            item->setFaceUp(false);  // Start face-down
+            item->setPos(startPos);
+            item->setRotation(startRotation);
+
+            // Animate position from hand to trick area
+            QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
+            posAnim->setDuration(200);
+            posAnim->setStartValue(startPos);
+            posAnim->setEndValue(dest);
+            posAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            // Animate rotation
+            QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
+            rotAnim->setDuration(200);
+            rotAnim->setStartValue(startRotation);
+            rotAnim->setEndValue(endRotation);
+            rotAnim->setEasingCurve(QEasingCurve::OutCubic);
+
+            // Flip the card face-up partway through the animation
+            QTimer::singleShot(100, item, [item]() {
+                item->setFaceUp(true);
+            });
+
+            QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
+            group->addAnimation(posAnim);
+            group->addAnimation(rotAnim);
+            group->start(QAbstractAnimation::DeleteWhenStopped);
+        } else {
+            // No animation - place card directly
+            item->setFaceUp(true);
+            item->setPos(dest);
+            item->setRotation(endRotation);
+        }
 
         layoutOpponentHand(player);
     }
@@ -752,7 +964,25 @@ void GameView::onCurrentPlayerChanged(int player) {
     if (player == 0) {
         showMessage("Your turn", 1000);
     }
+
+    // Highlight the current player's scoreboard
+    updateCurrentPlayerHighlight(player);
+
     updatePlayableCards();
+}
+
+void GameView::updateCurrentPlayerHighlight(int currentPlayer) {
+    for (int i = 0; i < 4; ++i) {
+        if (i == currentPlayer) {
+            // Active player - bright green glow border
+            m_scoreboards[i].background->setPen(QPen(QColor(100, 255, 100), 2));
+            m_scoreboards[i].background->setBrush(QColor(40, 60, 40, 220));
+        } else {
+            // Inactive player - normal dim border
+            m_scoreboards[i].background->setPen(QPen(QColor(80, 80, 80), 1));
+            m_scoreboards[i].background->setBrush(QColor(30, 30, 30, 200));
+        }
+    }
 }
 
 void GameView::onHeartsBroken() {

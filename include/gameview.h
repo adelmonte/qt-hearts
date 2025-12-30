@@ -23,6 +23,7 @@ public:
     void setTheme(CardTheme* theme);
     void setCardScale(qreal scale);
     qreal cardScale() const { return m_cardScale; }
+    void setAnimationSettings(bool cardRotation, bool aiCards, bool passingCards);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -59,7 +60,7 @@ private:
     void updatePlayableCards();
 
     void layoutCards();
-    void layoutPlayerHand();
+    void layoutPlayerHand(bool animate = false);
     void layoutOpponentHand(int player);
     void layoutScoreboards();
     void layoutTrickCards();
@@ -68,12 +69,14 @@ private:
     QPointF opponentHandPosition(int player) const;
     QPointF trickCardPosition(int player) const;
     QPointF scoreboardPosition(int player) const;
+    QPointF opponentHandCenter(int player) const;
 
     void showMessage(const QString& text, int durationMs = 2000);
     void hideMessage();
     void showPassArrow(PassDirection dir);
     void hidePassArrow();
     void showGameOver(int winner);
+    void updateCurrentPlayerHighlight(int currentPlayer);
 
     CardItem* createCardItem(const Card& card);
 
@@ -103,6 +106,7 @@ private:
     // Passing state
     Cards m_selectedPassCards;
     Cards m_receivedCards;  // Cards received from passing
+    PassDirection m_currentPassDirection;  // Current pass direction for animations
     bool m_inputBlocked;
     bool m_showingReceivedCards;  // True while received cards are highlighted
     bool m_passConfirmed;  // True after 3 cards confirmed, until next round
@@ -118,6 +122,11 @@ private:
     qreal m_cardHeight;
     qreal m_cardSpacing;
     qreal m_cardScale;
+
+    // Animation settings
+    bool m_animateCardRotation;
+    bool m_animateAICards;
+    bool m_animatePassingCards;
 };
 
 #endif // GAMEVIEW_H

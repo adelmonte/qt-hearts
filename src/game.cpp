@@ -73,6 +73,10 @@ void Game::dealCards() {
     setState(GameState::Dealing);
     m_roundNumber++;
 
+    // Clear any in-progress trick from previous round/game
+    m_currentTrick.clear();
+    m_trickPlayers.clear();
+
     // Determine pass direction (Left, Right, Across, None cycle)
     switch ((m_roundNumber - 1) % 4) {
         case 0: m_passDirection = PassDirection::Left; break;

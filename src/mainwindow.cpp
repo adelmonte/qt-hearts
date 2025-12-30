@@ -31,6 +31,9 @@ MainWindow::MainWindow(QWidget* parent)
     , m_theme(std::make_unique<CardTheme>())
     , m_sound(std::make_unique<SoundEngine>(this))
     , m_soundEnabled(true)
+    , m_animateCardRotation(true)
+    , m_animateAICards(true)
+    , m_animatePassingCards(true)
     , m_gamesPlayed(0)
     , m_gamesWon(0)
     , m_totalScore(0)
@@ -183,6 +186,12 @@ void MainWindow::loadSettings() {
     m_gameRules.fullPolish = settings.value("rules/fullPolish", false).toBool();
     m_game->setRules(m_gameRules);
 
+    // Animation settings
+    m_animateCardRotation = settings.value("animations/cardRotation", true).toBool();
+    m_animateAICards = settings.value("animations/aiCards", true).toBool();
+    m_animatePassingCards = settings.value("animations/passingCards", true).toBool();
+    m_gameView->setAnimationSettings(m_animateCardRotation, m_animateAICards, m_animatePassingCards);
+
     // Statistics
     m_gamesPlayed = settings.value("stats/gamesPlayed", 0).toInt();
     m_gamesWon = settings.value("stats/gamesWon", 0).toInt();
@@ -210,6 +219,11 @@ void MainWindow::saveSettings() {
     settings.setValue("rules/queenBreaksHearts", m_gameRules.queenBreaksHearts);
     settings.setValue("rules/moonProtection", m_gameRules.moonProtection);
     settings.setValue("rules/fullPolish", m_gameRules.fullPolish);
+
+    // Animation settings
+    settings.setValue("animations/cardRotation", m_animateCardRotation);
+    settings.setValue("animations/aiCards", m_animateAICards);
+    settings.setValue("animations/passingCards", m_animatePassingCards);
 
     // Statistics
     settings.setValue("stats/gamesPlayed", m_gamesPlayed);
@@ -349,6 +363,24 @@ void MainWindow::showSettings() {
 
     layout->addSpacing(10);
 
+    // ===== ANIMATION SETTINGS SECTION =====
+    QLabel* animHeader = new QLabel(tr("<b>Animations</b>"));
+    layout->addWidget(animHeader);
+
+    QCheckBox* cardRotationCheck = new QCheckBox(tr("Card rotation on trick pile (slight random tilt)"));
+    cardRotationCheck->setChecked(m_animateCardRotation);
+    layout->addWidget(cardRotationCheck);
+
+    QCheckBox* aiCardsCheck = new QCheckBox(tr("Animate AI card plays"));
+    aiCardsCheck->setChecked(m_animateAICards);
+    layout->addWidget(aiCardsCheck);
+
+    QCheckBox* passingCardsCheck = new QCheckBox(tr("Animate card passing"));
+    passingCardsCheck->setChecked(m_animatePassingCards);
+    layout->addWidget(passingCardsCheck);
+
+    layout->addSpacing(10);
+
     // AI Difficulty
     QHBoxLayout* difficultyLayout = new QHBoxLayout;
     difficultyLayout->addWidget(new QLabel(tr("AI Difficulty:")));
@@ -456,6 +488,12 @@ void MainWindow::showSettings() {
         m_gameRules.moonProtection = moonChoiceCheck->isChecked();
         m_gameRules.fullPolish = fullPolishCheck->isChecked();
         m_game->setRules(m_gameRules);
+
+        // Update animation settings
+        m_animateCardRotation = cardRotationCheck->isChecked();
+        m_animateAICards = aiCardsCheck->isChecked();
+        m_animatePassingCards = passingCardsCheck->isChecked();
+        m_gameView->setAnimationSettings(m_animateCardRotation, m_animateAICards, m_animatePassingCards);
     }
 }
 
