@@ -185,6 +185,25 @@ void GameView::resizeEvent(QResizeEvent* event) {
     layoutScoreboards();
     layoutTrickCards();  // Also relayout trick cards on resize
 
+    // Reposition message banner if visible
+    if (m_messageText && m_messageText->isVisible()) {
+        qreal msgWidth = m_messageText->boundingRect().width();
+        qreal msgHeight = m_messageText->boundingRect().height();
+        m_messageBackground->setRect(
+            (w - msgWidth - 30) / 2,
+            h * 0.4 - 5,
+            msgWidth + 30,
+            msgHeight + 10
+        );
+        m_messageText->setPos((w - msgWidth) / 2, h * 0.4);
+    }
+
+    // Reposition pass arrow if visible
+    if (m_passArrow && m_passArrow->isVisible()) {
+        qreal arrowWidth = m_passArrow->boundingRect().width();
+        m_passArrow->setPos((w - arrowWidth) / 2, h * 0.3);
+    }
+
     // Schedule a delayed relayout to correct any cards that were mid-animation
     QTimer::singleShot(250, this, [this]() {
         layoutTrickCards();
