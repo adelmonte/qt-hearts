@@ -36,6 +36,9 @@ public:
     bool isReceived() const { return m_received; }
     void setReceived(bool received);
 
+    bool isKeyboardFocused() const { return m_keyboardFocused; }
+    void setKeyboardFocused(bool focused);
+
     void setCardSize(const QSize& size);
     QSize cardSize() const { return m_size; }
 
@@ -63,6 +66,7 @@ private:
     bool m_hovered;
     bool m_inTrick;
     bool m_received;
+    bool m_keyboardFocused;
     QPixmap m_frontPixmap;
     QPixmap m_backPixmap;
 };

@@ -175,6 +175,14 @@ void MainWindow::loadSettings() {
     m_aiDifficulty = static_cast<AIDifficulty>(settings.value("aiDifficulty", static_cast<int>(AIDifficulty::Medium)).toInt());
     m_game->setAIDifficulty(m_aiDifficulty);
 
+    // Game rules
+    m_gameRules.endScore = settings.value("rules/endScore", 100).toInt();
+    m_gameRules.exactResetTo50 = settings.value("rules/exactResetTo50", false).toBool();
+    m_gameRules.queenBreaksHearts = settings.value("rules/queenBreaksHearts", true).toBool();
+    m_gameRules.moonProtection = settings.value("rules/moonProtection", false).toBool();
+    m_gameRules.fullPolish = settings.value("rules/fullPolish", false).toBool();
+    m_game->setRules(m_gameRules);
+
     // Statistics
     m_gamesPlayed = settings.value("stats/gamesPlayed", 0).toInt();
     m_gamesWon = settings.value("stats/gamesWon", 0).toInt();
@@ -195,6 +203,13 @@ void MainWindow::saveSettings() {
     settings.setValue("soundEnabled", m_soundEnabled);
     settings.setValue("aiDifficulty", static_cast<int>(m_aiDifficulty));
     settings.setValue("geometry", saveGeometry());
+
+    // Game rules
+    settings.setValue("rules/endScore", m_gameRules.endScore);
+    settings.setValue("rules/exactResetTo50", m_gameRules.exactResetTo50);
+    settings.setValue("rules/queenBreaksHearts", m_gameRules.queenBreaksHearts);
+    settings.setValue("rules/moonProtection", m_gameRules.moonProtection);
+    settings.setValue("rules/fullPolish", m_gameRules.fullPolish);
 
     // Statistics
     settings.setValue("stats/gamesPlayed", m_gamesPlayed);
@@ -347,6 +362,52 @@ void MainWindow::showSettings() {
     difficultyLayout->addWidget(difficultyCombo, 1);
     layout->addLayout(difficultyLayout);
 
+    layout->addSpacing(15);
+
+    // ===== GAME RULES SECTION =====
+    QLabel* rulesHeader = new QLabel(tr("<b>Game Rules</b>"));
+    layout->addWidget(rulesHeader);
+
+    // End score
+    QHBoxLayout* endScoreLayout = new QHBoxLayout;
+    endScoreLayout->addWidget(new QLabel(tr("Game ends at score:")));
+    QComboBox* endScoreCombo = new QComboBox;
+    endScoreCombo->addItem("50", 50);
+    endScoreCombo->addItem("75", 75);
+    endScoreCombo->addItem("100 (Standard)", 100);
+    endScoreCombo->addItem("150", 150);
+    for (int i = 0; i < endScoreCombo->count(); ++i) {
+        if (endScoreCombo->itemData(i).toInt() == m_gameRules.endScore) {
+            endScoreCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+    endScoreLayout->addWidget(endScoreCombo, 1);
+    layout->addLayout(endScoreLayout);
+
+    // Rule checkboxes
+    QCheckBox* exactResetCheck = new QCheckBox(tr("Exactly %1 = reset to 50 (\"Save and take half\")").arg(m_gameRules.endScore));
+    exactResetCheck->setChecked(m_gameRules.exactResetTo50);
+    layout->addWidget(exactResetCheck);
+
+    // Update the checkbox label when end score changes
+    connect(endScoreCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [exactResetCheck, endScoreCombo](int) {
+        int score = endScoreCombo->currentData().toInt();
+        exactResetCheck->setText(QObject::tr("Exactly %1 = reset to 50 (\"Save and take half\")").arg(score));
+    });
+
+    QCheckBox* queenBreaksCheck = new QCheckBox(tr("Queen of Spades breaks hearts"));
+    queenBreaksCheck->setChecked(m_gameRules.queenBreaksHearts);
+    layout->addWidget(queenBreaksCheck);
+
+    QCheckBox* moonChoiceCheck = new QCheckBox(tr("Shoot the Moon protection: if +26 to others would cause shooter to lose, they may take -26 instead"));
+    moonChoiceCheck->setChecked(m_gameRules.moonProtection);
+    layout->addWidget(moonChoiceCheck);
+
+    QCheckBox* fullPolishCheck = new QCheckBox(tr("Full Polish: 99 points + takes 25 = reset to 98"));
+    fullPolishCheck->setChecked(m_gameRules.fullPolish);
+    layout->addWidget(fullPolishCheck);
+
     layout->addSpacing(10);
 
     // Info about themes
@@ -387,6 +448,14 @@ void MainWindow::showSettings() {
 
         m_aiDifficulty = static_cast<AIDifficulty>(difficultyCombo->currentData().toInt());
         m_game->setAIDifficulty(m_aiDifficulty);
+
+        // Update game rules
+        m_gameRules.endScore = endScoreCombo->currentData().toInt();
+        m_gameRules.exactResetTo50 = exactResetCheck->isChecked();
+        m_gameRules.queenBreaksHearts = queenBreaksCheck->isChecked();
+        m_gameRules.moonProtection = moonChoiceCheck->isChecked();
+        m_gameRules.fullPolish = fullPolishCheck->isChecked();
+        m_game->setRules(m_gameRules);
     }
 }
 

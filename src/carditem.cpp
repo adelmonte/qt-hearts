@@ -15,6 +15,7 @@ CardItem::CardItem(const Card& card, CardTheme* theme, QGraphicsItem* parent)
     , m_hovered(false)
     , m_inTrick(false)
     , m_received(false)
+    , m_keyboardFocused(false)
 {
     setAcceptHoverEvents(true);
     setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -53,6 +54,7 @@ void CardItem::resetVisualState() {
     m_hovered = false;
     m_inTrick = false;
     m_received = false;
+    m_keyboardFocused = false;
     setCursor(Qt::ArrowCursor);
     update();
 }
@@ -67,6 +69,13 @@ void CardItem::setInTrick(bool inTrick) {
 void CardItem::setReceived(bool received) {
     if (m_received != received) {
         m_received = received;
+        update();
+    }
+}
+
+void CardItem::setKeyboardFocused(bool focused) {
+    if (m_keyboardFocused != focused) {
+        m_keyboardFocused = focused;
         update();
     }
 }
@@ -99,7 +108,7 @@ void CardItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     // Selected cards float up
     if (m_selected) {
         yOffset = -15;
-    } else if (m_hovered && m_playable) {
+    } else if ((m_hovered || m_keyboardFocused) && m_playable) {
         yOffset = -8;
     }
 
@@ -123,9 +132,10 @@ void CardItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         painter->drawRoundedRect(cardRect, 5, 5);
     }
 
-    // Highlight for playable cards
-    if (m_playable && m_hovered) {
-        painter->setPen(QPen(QColor(100, 200, 100), 3));
+    // Highlight for playable cards (hover or keyboard focus)
+    if (m_playable && (m_hovered || m_keyboardFocused)) {
+        QColor highlightColor = m_keyboardFocused ? QColor(255, 220, 100) : QColor(100, 200, 100);
+        painter->setPen(QPen(highlightColor, 3));
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(cardRect.adjusted(-1, -1, 1, 1), 6, 6);
     }

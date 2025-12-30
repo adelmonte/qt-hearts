@@ -4,8 +4,8 @@
 #include <QMainWindow>
 #include <memory>
 #include "player.h"  // For AIDifficulty enum
+#include "game.h"    // For GameRules struct
 
-class Game;
 class GameView;
 class CardTheme;
 class SoundEngine;
@@ -55,6 +55,7 @@ private:
     qreal m_cardScale;
     bool m_soundEnabled;
     AIDifficulty m_aiDifficulty;
+    GameRules m_gameRules;
 
     // Statistics
     int m_gamesPlayed;

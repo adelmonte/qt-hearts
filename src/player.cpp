@@ -1,7 +1,12 @@
 #include "player.h"
 #include <algorithm>
-#include <random>
 #include <chrono>
+
+// Static RNG shared across all AI decisions - seeded once
+std::mt19937& Player::rng() {
+    static std::mt19937 instance(std::chrono::steady_clock::now().time_since_epoch().count());
+    return instance;
+}
 
 Player::Player(int id, const QString& name, bool isHuman)
     : m_id(id), m_name(name), m_isHuman(isHuman), m_roundScore(0), m_totalScore(0), m_difficulty(AIDifficulty::Medium) {}
@@ -80,8 +85,16 @@ Cards Player::getValidPlays(Suit leadSuit, bool isFirstTrick, bool heartsBroken)
     return m_hand;
 }
 
+// ============================================================================
+// PASS CARD SELECTION
+// ============================================================================
+
 Cards Player::selectPassCards() {
-    // AI: Pass dangerous cards
+    if (m_difficulty == AIDifficulty::Hard) {
+        return selectPassCardsHard();
+    }
+
+    // Medium/Easy: Pass dangerous cards
     // Priority: QoS, high spades (A, K), high hearts, other high cards
     Cards toPass;
     Cards remaining = m_hand;
@@ -116,7 +129,111 @@ Cards Player::selectPassCards() {
     return toPass;
 }
 
-Card Player::selectPlay(Suit leadSuit, bool isFirstTrick, bool heartsBroken, const Cards& trickCards) {
+Cards Player::selectPassCardsHard() {
+    // Hard mode: Strategic passing with void creation and Q♠ protection
+    Cards toPass;
+    Cards remaining = m_hand;
+
+    // Count cards in each suit
+    int suitCounts[4] = {0, 0, 0, 0};
+    for (const Card& c : m_hand) {
+        suitCounts[static_cast<int>(c.suit())]++;
+    }
+
+    // Check if we have Q♠ protection (K♠ and/or A♠ with Q♠)
+    bool hasQoS = hasCard(Card(Suit::Spades, Rank::Queen));
+    bool hasKoS = hasCard(Card(Suit::Spades, Rank::King));
+    bool hasAoS = hasCard(Card(Suit::Spades, Rank::Ace));
+    int spadeCount = suitCounts[static_cast<int>(Suit::Spades)];
+
+    // If we have Q♠ with good protection (A+K or 5+ spades), consider keeping it
+    bool keepQoS = hasQoS && ((hasKoS && hasAoS) || spadeCount >= 5);
+
+    // Find shortest non-spade suit for void creation
+    Suit shortestSuit = Suit::Clubs;
+    int shortestCount = 14;
+    for (int s = 0; s < 4; ++s) {
+        Suit suit = static_cast<Suit>(s);
+        if (suit != Suit::Spades && suitCounts[s] > 0 && suitCounts[s] < shortestCount) {
+            shortestCount = suitCounts[s];
+            shortestSuit = suit;
+        }
+    }
+
+    // Strategy: Try to create a void by passing all cards of shortest suit
+    // But prioritize getting rid of dangerous cards first
+    Cards dangerousCards;
+
+    // Q♠ unless well protected
+    if (hasQoS && !keepQoS) {
+        dangerousCards.append(Card(Suit::Spades, Rank::Queen));
+    }
+
+    // A♠ and K♠ are dangerous if we don't have Q♠ (we might catch it)
+    if (!hasQoS) {
+        if (hasAoS) dangerousCards.append(Card(Suit::Spades, Rank::Ace));
+        if (hasKoS) dangerousCards.append(Card(Suit::Spades, Rank::King));
+    }
+
+    // High hearts
+    Cards hearts = cardsOfSuit(m_hand, Suit::Hearts);
+    std::sort(hearts.begin(), hearts.end(), [](const Card& a, const Card& b) {
+        return a.rank() > b.rank();
+    });
+    for (const Card& h : hearts) {
+        if (h.rank() >= Rank::Queen) {
+            dangerousCards.append(h);
+        }
+    }
+
+    // Add dangerous cards first
+    for (const Card& c : dangerousCards) {
+        if (toPass.size() >= 3) break;
+        if (!toPass.contains(c)) {
+            toPass.append(c);
+        }
+    }
+
+    // If we can complete a void with remaining passes, do it
+    if (toPass.size() < 3 && shortestCount <= (3 - toPass.size())) {
+        Cards shortSuitCards = cardsOfSuit(m_hand, shortestSuit);
+        for (const Card& c : shortSuitCards) {
+            if (toPass.size() >= 3) break;
+            if (!toPass.contains(c)) {
+                toPass.append(c);
+            }
+        }
+    }
+
+    // Fill remaining with highest cards (non-spade if we're protecting Q♠)
+    if (toPass.size() < 3) {
+        Cards candidates = remaining;
+        std::sort(candidates.begin(), candidates.end(), [keepQoS](const Card& a, const Card& b) {
+            // If protecting spades, deprioritize them
+            if (keepQoS) {
+                if (a.suit() == Suit::Spades && b.suit() != Suit::Spades) return false;
+                if (a.suit() != Suit::Spades && b.suit() == Suit::Spades) return true;
+            }
+            return a.rank() > b.rank();
+        });
+
+        for (const Card& c : candidates) {
+            if (toPass.size() >= 3) break;
+            if (!toPass.contains(c)) {
+                toPass.append(c);
+            }
+        }
+    }
+
+    return toPass;
+}
+
+// ============================================================================
+// MAIN PLAY SELECTION
+// ============================================================================
+
+Card Player::selectPlay(Suit leadSuit, bool isFirstTrick, bool heartsBroken,
+                        const Cards& trickCards, const QVector<int>& trickPlayers) {
     Cards valid = getValidPlays(leadSuit, isFirstTrick, heartsBroken);
 
     if (valid.isEmpty()) {
@@ -130,7 +247,6 @@ Card Player::selectPlay(Suit leadSuit, bool isFirstTrick, bool heartsBroken, con
     // Route to different strategies based on difficulty
     switch (m_difficulty) {
         case AIDifficulty::Easy:
-            // Easy: More random choices, makes mistakes
             if (trickCards.isEmpty()) {
                 return aiSelectLeadEasy(valid);
             }
@@ -140,18 +256,16 @@ Card Player::selectPlay(Suit leadSuit, bool isFirstTrick, bool heartsBroken, con
             return aiSelectSlough(valid);
 
         case AIDifficulty::Hard:
-            // Hard: Smarter card counting and strategy
             if (trickCards.isEmpty()) {
                 return aiSelectLeadHard(valid, heartsBroken);
             }
             if (hasSuit(valid, leadSuit)) {
-                return aiSelectFollowHard(valid, leadSuit, trickCards);
+                return aiSelectFollowHard(valid, leadSuit, trickCards, trickPlayers);
             }
-            return aiSelectSloughHard(valid, trickCards);
+            return aiSelectSloughHard(valid, trickCards, trickPlayers);
 
         case AIDifficulty::Medium:
         default:
-            // Medium: Current balanced strategy
             if (trickCards.isEmpty()) {
                 return aiSelectLead(valid, heartsBroken);
             }
@@ -161,6 +275,29 @@ Card Player::selectPlay(Suit leadSuit, bool isFirstTrick, bool heartsBroken, con
             return aiSelectSlough(valid);
     }
 }
+
+// ============================================================================
+// EASY DIFFICULTY
+// ============================================================================
+
+Card Player::aiSelectLeadEasy(const Cards& valid) {
+    // Easy: 50% random, 50% highest card (bad strategy)
+    if (std::uniform_int_distribution<>(0, 1)(rng()) == 0) {
+        std::uniform_int_distribution<> dist(0, valid.size() - 1);
+        return valid[dist(rng())];
+    }
+    return highestCard(valid);
+}
+
+Card Player::aiSelectFollowEasy(const Cards& valid) {
+    // Easy: Play random card when following suit
+    std::uniform_int_distribution<> dist(0, valid.size() - 1);
+    return valid[dist(rng())];
+}
+
+// ============================================================================
+// MEDIUM DIFFICULTY
+// ============================================================================
 
 Card Player::aiSelectLead(const Cards& valid, bool heartsBroken) {
     // Prefer leading low non-point cards
@@ -185,11 +322,7 @@ Card Player::aiSelectLead(const Cards& valid, bool heartsBroken) {
     }
 
     // Just play lowest
-    Card lowest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() < lowest.rank()) lowest = c;
-    }
-    return lowest;
+    return lowestCard(valid);
 }
 
 Card Player::aiSelectFollow(const Cards& valid, Suit leadSuit, const Cards& trickCards) {
@@ -197,28 +330,15 @@ Card Player::aiSelectFollow(const Cards& valid, Suit leadSuit, const Cards& tric
     Card highest = highestOfSuit(trickCards, leadSuit);
 
     // Try to play under if possible
-    Cards under;
-    for (const Card& c : valid) {
-        if (c.suit() == leadSuit && c.rank() < highest.rank()) {
-            under.append(c);
-        }
-    }
+    Cards validInSuit = cardsOfSuit(valid, leadSuit);
+    Card under = highestBelow(validInSuit, highest.rank());
 
-    if (!under.isEmpty()) {
-        // Play highest card that's still under
-        Card best = under.first();
-        for (const Card& c : under) {
-            if (c.rank() > best.rank()) best = c;
-        }
-        return best;
+    if (under.isValid()) {
+        return under;
     }
 
     // Must play over - play lowest to minimize winning future bad tricks
-    Card lowest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() < lowest.rank()) lowest = c;
-    }
-    return lowest;
+    return lowestCard(valid);
 }
 
 Card Player::aiSelectSlough(const Cards& valid) {
@@ -236,62 +356,43 @@ Card Player::aiSelectSlough(const Cards& valid) {
     }
 
     // Highest heart
-    Card highHeart;
-    for (const Card& c : valid) {
-        if (c.isHeart()) {
-            if (!highHeart.isValid() || c.rank() > highHeart.rank()) {
-                highHeart = c;
-            }
-        }
-    }
+    Card highHeart = highestOfSuit(valid, Suit::Hearts);
     if (highHeart.isValid()) return highHeart;
 
     // Highest card overall
-    Card highest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() > highest.rank()) highest = c;
-    }
-    return highest;
+    return highestCard(valid);
 }
 
-// Easy difficulty: Makes suboptimal choices, plays somewhat randomly
-Card Player::aiSelectLeadEasy(const Cards& valid) {
-    // Easy: Pick a random card (50% of time) or just play highest (bad strategy)
-    static std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+// ============================================================================
+// HARD DIFFICULTY - Uses card counting and positional awareness
+// ============================================================================
 
-    if (std::uniform_int_distribution<>(0, 1)(rng) == 0) {
-        // Random card
-        std::uniform_int_distribution<> dist(0, valid.size() - 1);
-        return valid[dist(rng)];
-    }
-
-    // Otherwise play highest card (suboptimal - tends to win tricks)
-    Card highest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() > highest.rank()) highest = c;
-    }
-    return highest;
-}
-
-Card Player::aiSelectFollowEasy(const Cards& valid) {
-    // Easy: Play random card when following suit
-    static std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
-    std::uniform_int_distribution<> dist(0, valid.size() - 1);
-    return valid[dist(rng)];
-}
-
-// Hard difficulty: Advanced strategies
 Card Player::aiSelectLeadHard(const Cards& valid, bool heartsBroken) {
-    // Hard: Lead cards strategically to flush out high cards
+    // Use card memory for smarter decisions
+    const CardMemory& mem = m_cardMemory;
 
-    // Count cards by suit to identify short suits in opponents
-    // Lead from suits where we have control (A-K-Q sequence)
+    // Check if Q♠ is still out there
+    bool qosOut = !mem.queenSpadesPlayed && !hasCard(Card(Suit::Spades, Rank::Queen));
 
-    // Priority 1: If we have low cards in a suit with protection, lead low
+    // If Q♠ is out and we have low spades, consider flushing it
+    if (qosOut) {
+        Cards spades = cardsOfSuit(valid, Suit::Spades);
+        Card lowSpade = lowestOfSuit(valid, Suit::Spades);
+
+        // Lead low spade if we have one below Queen and spades haven't been depleted
+        if (lowSpade.isValid() && lowSpade.rank() < Rank::Queen) {
+            int spadesPlayed = mem.countPlayedInSuit(Suit::Spades);
+            // Good time to flush if not too many spades played yet
+            if (spadesPlayed < 6) {
+                return lowSpade;
+            }
+        }
+    }
+
+    // Lead from long suits where we have low cards (safe leads)
     for (Suit s : {Suit::Clubs, Suit::Diamonds}) {
         Cards suitCards = cardsOfSuit(valid, s);
         if (suitCards.size() >= 2) {
-            // Have multiple cards in this suit - lead lowest
             Card lowest = lowestOfSuit(valid, s);
             if (lowest.isValid() && lowest.rank() <= Rank::Seven) {
                 return lowest;
@@ -299,153 +400,162 @@ Card Player::aiSelectLeadHard(const Cards& valid, bool heartsBroken) {
         }
     }
 
-    // Priority 2: Lead spades below Queen to flush out QoS
-    Cards spades = cardsOfSuit(valid, Suit::Spades);
-    bool hasHighSpades = false;
-    for (const Card& c : spades) {
-        if (c.rank() >= Rank::Queen) hasHighSpades = true;
-    }
-
-    // If we don't have dangerous spades, lead low spades to flush others
-    if (!hasHighSpades && !spades.isEmpty()) {
-        Card lowest = lowestOfSuit(valid, Suit::Spades);
-        if (lowest.isValid() && lowest.rank() < Rank::Queen) {
-            return lowest;
-        }
-    }
-
-    // Priority 3: If hearts broken, lead low hearts to run out opponents
+    // If hearts broken and we have low hearts, can lead them
     if (heartsBroken) {
         Card lowHeart = lowestOfSuit(valid, Suit::Hearts);
-        if (lowHeart.isValid()) {
+        if (lowHeart.isValid() && lowHeart.rank() <= Rank::Six) {
             return lowHeart;
         }
     }
 
-    // Fallback: lowest card overall
-    Card lowest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() < lowest.rank()) lowest = c;
+    // Safe low card from any suit
+    for (Suit s : {Suit::Clubs, Suit::Diamonds}) {
+        Card low = lowestOfSuit(valid, s);
+        if (low.isValid()) return low;
     }
-    return lowest;
+
+    // Low spade if safe
+    Card lowSpade = lowestOfSuit(valid, Suit::Spades);
+    if (lowSpade.isValid() && lowSpade.rank() < Rank::Jack) {
+        return lowSpade;
+    }
+
+    // Hearts if broken
+    if (heartsBroken) {
+        Card low = lowestOfSuit(valid, Suit::Hearts);
+        if (low.isValid()) return low;
+    }
+
+    return lowestCard(valid);
 }
 
-Card Player::aiSelectFollowHard(const Cards& valid, Suit leadSuit, const Cards& trickCards) {
-    Card highest = highestOfSuit(trickCards, leadSuit);
+Card Player::aiSelectFollowHard(const Cards& valid, Suit leadSuit, const Cards& trickCards,
+                                 const QVector<int>& trickPlayers) {
+    Card highestPlayed = highestOfSuit(trickCards, leadSuit);
     int numCardsPlayed = trickCards.size();
 
-    // If we're last to play and trick has no points, we can safely win
+    // Calculate trick points
+    int trickPoints = 0;
+    for (const Card& c : trickCards) {
+        trickPoints += c.pointValue();
+    }
+
+    // Cards we can play in the lead suit
+    Cards validInSuit = cardsOfSuit(valid, leadSuit);
+
+    // If we're LAST to play (position 4)
     if (numCardsPlayed == 3) {
-        int trickPoints = 0;
-        for (const Card& c : trickCards) {
-            trickPoints += c.pointValue();
-        }
-
         if (trickPoints == 0) {
-            // Safe to win - play highest under if possible, else lowest over
-            Cards under;
-            for (const Card& c : valid) {
-                if (c.suit() == leadSuit && c.rank() < highest.rank()) {
-                    under.append(c);
-                }
-            }
-            if (!under.isEmpty()) {
-                // Play highest under
-                Card best = under.first();
-                for (const Card& c : under) {
-                    if (c.rank() > best.rank()) best = c;
-                }
-                return best;
-            }
-            // Have to beat - play lowest that beats
-            Card lowest = valid.first();
-            for (const Card& c : valid) {
-                if (c.rank() < lowest.rank()) lowest = c;
-            }
-            return lowest;
+            // No points in trick - safe to win with highest under, or win if must
+            Card under = highestBelow(validInSuit, highestPlayed.rank());
+            if (under.isValid()) return under;
+            // Must win - that's fine, no points
+            return lowestCard(valid);
+        } else {
+            // Points in trick - try hard to duck
+            Card under = highestBelow(validInSuit, highestPlayed.rank());
+            if (under.isValid()) return under;
+            // Must win points - minimize by playing lowest
+            return lowestCard(valid);
         }
     }
 
-    // Trick has points or we're not last - try hard to duck
-    Cards under;
-    for (const Card& c : valid) {
-        if (c.suit() == leadSuit && c.rank() < highest.rank()) {
-            under.append(c);
+    // If we're THIRD to play (position 3)
+    if (numCardsPlayed == 2) {
+        // Check if we know player 4 is void in this suit
+        int lastPlayer = (m_id + 1) % 4;
+        bool lastPlayerVoid = m_cardMemory.isPlayerVoid(lastPlayer, leadSuit);
+
+        if (lastPlayerVoid && trickPoints == 0) {
+            // Last player might dump points - try to not win
+            Card under = highestBelow(validInSuit, highestPlayed.rank());
+            if (under.isValid()) return under;
         }
+
+        // Standard play - try to duck
+        Card under = highestBelow(validInSuit, highestPlayed.rank());
+        if (under.isValid()) return under;
+
+        return lowestCard(valid);
     }
 
-    if (!under.isEmpty()) {
-        // Play highest card that still ducks
-        Card best = under.first();
-        for (const Card& c : under) {
-            if (c.rank() > best.rank()) best = c;
-        }
-        return best;
-    }
+    // SECOND to play - be conservative
+    Card under = highestBelow(validInSuit, highestPlayed.rank());
+    if (under.isValid()) return under;
 
-    // Must beat - play lowest possible
-    Card lowest = valid.first();
-    for (const Card& c : valid) {
-        if (c.rank() < lowest.rank()) lowest = c;
-    }
-    return lowest;
+    return lowestCard(valid);
 }
 
-Card Player::aiSelectSloughHard(const Cards& valid, const Cards& trickCards) {
+Card Player::aiSelectSloughHard(const Cards& valid, const Cards& trickCards,
+                                 [[maybe_unused]] const QVector<int>& trickPlayers) {
     // Calculate current trick points
     int trickPoints = 0;
     for (const Card& c : trickCards) {
         trickPoints += c.pointValue();
     }
 
-    // If trick already has points, dump highest point cards
+    // If trick already has points, dump high point cards
     if (trickPoints > 0) {
-        // QoS first
+        // Q♠ first - this is huge
         for (const Card& c : valid) {
             if (c.isQueenOfSpades()) return c;
         }
-        // Highest heart
-        Card highHeart;
-        for (const Card& c : valid) {
-            if (c.isHeart()) {
-                if (!highHeart.isValid() || c.rank() > highHeart.rank()) {
-                    highHeart = c;
-                }
-            }
-        }
+
+        // Highest hearts next
+        Card highHeart = highestOfSuit(valid, Suit::Hearts);
         if (highHeart.isValid()) return highHeart;
     }
 
-    // Dump high spades to avoid catching QoS later
-    for (const Card& c : valid) {
-        if (c.suit() == Suit::Spades && c.rank() == Rank::Ace) return c;
-    }
-    for (const Card& c : valid) {
-        if (c.suit() == Suit::Spades && c.rank() == Rank::King) return c;
-    }
+    // Check if Q♠ is still out and we have A♠ or K♠
+    bool qosOut = !m_cardMemory.queenSpadesPlayed;
+    bool weHaveQoS = hasCard(Card(Suit::Spades, Rank::Queen));
 
-    // Dump high cards from long suits to create voids
-    // Count our suits
-    int clubCount = 0, diamondCount = 0;
-    Card highClub, highDiamond;
-    for (const Card& c : valid) {
-        if (c.suit() == Suit::Clubs) {
-            clubCount++;
-            if (!highClub.isValid() || c.rank() > highClub.rank()) highClub = c;
-        } else if (c.suit() == Suit::Diamonds) {
-            diamondCount++;
-            if (!highDiamond.isValid() || c.rank() > highDiamond.rank()) highDiamond = c;
+    if (qosOut && !weHaveQoS) {
+        // Dump A♠ to avoid catching Q♠ later
+        for (const Card& c : valid) {
+            if (c.suit() == Suit::Spades && c.rank() == Rank::Ace) return c;
+        }
+        // Dump K♠
+        for (const Card& c : valid) {
+            if (c.suit() == Suit::Spades && c.rank() == Rank::King) return c;
         }
     }
 
-    // Dump from longer suit to create void
-    if (clubCount > diamondCount && clubCount > 1 && highClub.isValid()) {
-        return highClub;
-    }
-    if (diamondCount > clubCount && diamondCount > 1 && highDiamond.isValid()) {
-        return highDiamond;
+    // If we have Q♠, try to dump it when safe
+    if (weHaveQoS) {
+        for (const Card& c : valid) {
+            if (c.isQueenOfSpades()) return c;
+        }
     }
 
-    // Fallback to medium strategy
-    return aiSelectSlough(valid);
+    // Dump from longest suit to work toward creating voids
+    int suitCounts[4] = {0, 0, 0, 0};
+    for (const Card& c : m_hand) {
+        suitCounts[static_cast<int>(c.suit())]++;
+    }
+
+    // Find longest non-heart suit in valid cards
+    Suit longestSuit = Suit::Clubs;
+    int longestCount = 0;
+    for (const Card& c : valid) {
+        if (c.suit() != Suit::Hearts) {
+            int count = suitCounts[static_cast<int>(c.suit())];
+            if (count > longestCount) {
+                longestCount = count;
+                longestSuit = c.suit();
+            }
+        }
+    }
+
+    // Dump highest from longest suit
+    if (longestCount > 0) {
+        Card high = highestOfSuit(valid, longestSuit);
+        if (high.isValid()) return high;
+    }
+
+    // Fallback: highest hearts, then highest overall
+    Card highHeart = highestOfSuit(valid, Suit::Hearts);
+    if (highHeart.isValid()) return highHeart;
+
+    return highestCard(valid);
 }

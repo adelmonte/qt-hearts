@@ -21,7 +21,21 @@ enum class GameState {
     GameOver
 };
 
-enum class PassDirection { Left, Right, Across };
+enum class PassDirection { Left, Right, Across, None };
+
+// Game rules configuration
+struct GameRules {
+    int endScore = 100;              // Game ends when a player reaches this score
+    bool exactResetTo50 = false;     // If score is exactly endScore, reset to 50
+    bool queenBreaksHearts = true;   // Q♠ breaks hearts when played (standard: true)
+    bool moonProtection = false;     // If +26 to others would cause shooter to lose, they can take -26 instead
+    bool fullPolish = false;         // 99 points + takes 25 = reset to 98
+
+    // Default standard rules
+    static GameRules standard() {
+        return GameRules{100, false, true, false, false};
+    }
+};
 
 // Snapshot of game state for undo functionality
 struct GameSnapshot {
@@ -49,7 +63,6 @@ class Game : public QObject {
 public:
     static const int NUM_PLAYERS = 4;
     static const int CARDS_TO_PASS = 3;
-    static const int MAX_SCORE = 100;
 
     explicit Game(QObject* parent = nullptr);
 
@@ -58,6 +71,10 @@ public:
     void setPlayerName(int index, const QString& name);
     void setAIDifficulty(AIDifficulty difficulty);
     AIDifficulty aiDifficulty() const;
+
+    // Game rules
+    void setRules(const GameRules& rules) { m_rules = rules; }
+    const GameRules& rules() const { return m_rules; }
 
     // Human interactions
     void humanPassCards(const Cards& cards);
@@ -126,6 +143,7 @@ private:
     int m_currentPlayer;
     bool m_heartsBroken;
     bool m_isFirstTrick;
+    GameRules m_rules;
 
     std::array<std::unique_ptr<Player>, NUM_PLAYERS> m_players;
     QVector<Cards> m_passedCards; // Cards each player is passing

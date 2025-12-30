@@ -73,11 +73,12 @@ void Game::dealCards() {
     setState(GameState::Dealing);
     m_roundNumber++;
 
-    // Determine pass direction (Left, Right, Across cycle)
-    switch ((m_roundNumber - 1) % 3) {
+    // Determine pass direction (Left, Right, Across, None cycle)
+    switch ((m_roundNumber - 1) % 4) {
         case 0: m_passDirection = PassDirection::Left; break;
         case 1: m_passDirection = PassDirection::Right; break;
         case 2: m_passDirection = PassDirection::Across; break;
+        case 3: m_passDirection = PassDirection::None; break;
     }
 
     // Deal cards
@@ -95,6 +96,13 @@ void Game::dealCards() {
 }
 
 void Game::startPassing() {
+    // No passing on "None" rounds - go straight to playing
+    if (m_passDirection == PassDirection::None) {
+        emit passDirectionAnnounced(m_passDirection);
+        QTimer::singleShot(500, this, &Game::startPlaying);
+        return;
+    }
+
     setState(GameState::Passing);
     emit passDirectionAnnounced(m_passDirection);
 
@@ -132,8 +140,9 @@ void Game::executePassing() {
             case PassDirection::Left:   return (from + 1) % NUM_PLAYERS;
             case PassDirection::Right:  return (from + 3) % NUM_PLAYERS;
             case PassDirection::Across: return (from + 2) % NUM_PLAYERS;
+            case PassDirection::None:   return from; // Should never be called
         }
-        return (from + 1) % NUM_PLAYERS;
+        return from;
     };
 
     // Collect cards to give to each player
@@ -165,6 +174,11 @@ void Game::startPlaying() {
     m_isFirstTrick = true;
     m_currentTrick.clear();
     m_trickPlayers.clear();
+
+    // Reset card memory for all AI players at start of round
+    for (int i = 1; i < NUM_PLAYERS; ++i) {
+        m_players[i]->resetCardMemory();
+    }
 
     // Find who has 2 of clubs
     m_currentPlayer = findTwoOfClubsPlayer();
@@ -240,9 +254,20 @@ void Game::humanPlayCard(const Card& card) {
     m_currentTrick.append(card);
     m_trickPlayers.append(0);
 
-    if (card.isHeart() && !m_heartsBroken) {
-        m_heartsBroken = true;
-        emit heartsBrokenSignal();
+    // Update card memory for all AI players
+    for (int i = 1; i < NUM_PLAYERS; ++i) {
+        m_players[i]->cardMemory().recordCard(card, 0, m_leadSuit);
+    }
+
+    // Check if hearts broken - Q♠ only breaks hearts if rule enabled
+    if (!m_heartsBroken) {
+        if (card.isHeart()) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
+        } else if (card.isQueenOfSpades() && m_rules.queenBreaksHearts) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
+        }
     }
 
     emit cardPlayed(0, card);
@@ -256,7 +281,7 @@ void Game::aiTurn() {
     Player* ai = m_players[m_currentPlayer].get();
 
     Suit leadSuit = m_currentTrick.isEmpty() ? Suit::Clubs : m_leadSuit;
-    Card card = ai->selectPlay(leadSuit, m_isFirstTrick, m_heartsBroken, m_currentTrick);
+    Card card = ai->selectPlay(leadSuit, m_isFirstTrick, m_heartsBroken, m_currentTrick, m_trickPlayers);
 
     ai->removeCard(card);
 
@@ -267,9 +292,20 @@ void Game::aiTurn() {
     m_currentTrick.append(card);
     m_trickPlayers.append(m_currentPlayer);
 
-    if (card.isHeart() && !m_heartsBroken) {
-        m_heartsBroken = true;
-        emit heartsBrokenSignal();
+    // Update card memory for all AI players
+    for (int i = 1; i < NUM_PLAYERS; ++i) {
+        m_players[i]->cardMemory().recordCard(card, m_currentPlayer, m_leadSuit);
+    }
+
+    // Check if hearts broken - Q♠ only breaks hearts if rule enabled
+    if (!m_heartsBroken) {
+        if (card.isHeart()) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
+        } else if (card.isQueenOfSpades() && m_rules.queenBreaksHearts) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
+        }
     }
 
     emit cardPlayed(m_currentPlayer, card);
@@ -373,18 +409,66 @@ bool Game::checkShootTheMoon() {
 void Game::endRound() {
     setState(GameState::RoundComplete);
 
+    // Check for Full Polish BEFORE applying round scores
+    // Rule: 99 points at start + takes exactly 25 = reset to 98
+    if (m_rules.fullPolish) {
+        for (int i = 0; i < NUM_PLAYERS; ++i) {
+            if (m_players[i]->totalScore() == 99 && m_players[i]->roundScore() == 25) {
+                // Full Polish! Set round score to -1 so total becomes 98
+                m_players[i]->setRoundScore(-1);
+            }
+        }
+    }
+
     // Check for shoot the moon
     for (int i = 0; i < NUM_PLAYERS; ++i) {
         if (m_players[i]->roundScore() == 26) {
-            // Shooter gets 0, everyone else gets 26
-            for (int j = 0; j < NUM_PLAYERS; ++j) {
-                if (j != i) {
-                    // Add 26 minus what they already have
-                    m_players[j]->addRoundPoints(26 - m_players[j]->roundScore());
+            // Determine whether to take -26 or give +26 to others
+            bool takeNegative = false;
+
+            if (m_rules.moonProtection) {
+                // Choice rule: shooter can choose -26 self OR +26 others
+                // BUT only if +26 to others would cause the shooter to LOSE
+                // (i.e., game ends AND someone else has a lower score than shooter)
+
+                int shooterTotal = m_players[i]->totalScore();
+
+                // Simulate giving +26 to others
+                bool gameWouldEnd = false;
+                int lowestOtherScore = 999;
+                for (int j = 0; j < NUM_PLAYERS; ++j) {
+                    if (j != i) {
+                        int otherNewTotal = m_players[j]->totalScore() + 26;
+                        if (otherNewTotal >= m_rules.endScore) {
+                            gameWouldEnd = true;
+                        }
+                        // Track lowest score among others (after +26)
+                        if (otherNewTotal < lowestOtherScore) {
+                            lowestOtherScore = otherNewTotal;
+                        }
+                    }
+                }
+
+                // Shooter loses if game ends AND someone else has lower score
+                // (lowest score wins in Hearts)
+                if (gameWouldEnd && lowestOtherScore < shooterTotal) {
+                    takeNegative = true;
                 }
             }
-            // Reset shooter to 0
-            m_players[i]->addRoundPoints(-26);
+
+            if (takeNegative) {
+                // Shooter takes -26 (their round score becomes 0 effectively)
+                m_players[i]->addRoundPoints(-26);
+                // Others keep their current round scores (no +26)
+            } else {
+                // Standard: shooter gets 0, everyone else gets 26
+                for (int j = 0; j < NUM_PLAYERS; ++j) {
+                    if (j != i) {
+                        m_players[j]->addRoundPoints(26 - m_players[j]->roundScore());
+                    }
+                }
+                m_players[i]->addRoundPoints(-26);
+            }
             break;
         }
     }
@@ -394,12 +478,21 @@ void Game::endRound() {
         p->endRound();
     }
 
+    // Apply "exactly endScore = reset to 50" rule
+    if (m_rules.exactResetTo50) {
+        for (auto& p : m_players) {
+            if (p->totalScore() == m_rules.endScore) {
+                p->setTotalScore(50);
+            }
+        }
+    }
+
     emit roundEnded();
     emit scoresChanged();
 
-    // Check for game over
+    // Check for game over (score > endScore, not >=, because exactly 100 may reset)
     for (const auto& p : m_players) {
-        if (p->totalScore() >= MAX_SCORE) {
+        if (p->totalScore() >= m_rules.endScore) {
             endGame();
             return;
         }

@@ -7,6 +7,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
 #include <QGraphicsRectItem>
+#include <QKeyEvent>
 #include <memory>
 
 class CardItem;
@@ -26,6 +27,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void drawBackground(QPainter* painter, const QRectF& rect) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
     void onStateChanged(GameState state);
@@ -105,6 +107,11 @@ private:
     bool m_showingReceivedCards;  // True while received cards are highlighted
     bool m_passConfirmed;  // True after 3 cards confirmed, until next round
     QTimer* m_receivedHighlightTimer;
+
+    // Keyboard navigation
+    int m_keyboardFocusIndex;  // Currently focused card (-1 = none)
+    void updateKeyboardFocus();
+    void selectFocusedCard();
 
     // Sizes
     qreal m_cardWidth;

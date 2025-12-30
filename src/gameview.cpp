@@ -21,6 +21,7 @@ GameView::GameView(QWidget* parent)
     , m_showingReceivedCards(false)
     , m_passConfirmed(false)
     , m_receivedHighlightTimer(nullptr)
+    , m_keyboardFocusIndex(-1)
     , m_cardWidth(80)
     , m_cardHeight(116)
     , m_cardSpacing(22)
@@ -33,6 +34,7 @@ GameView::GameView(QWidget* parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setFrameStyle(QFrame::NoFrame);
+    setFocusPolicy(Qt::StrongFocus);  // Enable keyboard focus
 
     m_opponentCards.resize(4); // For players 1, 2, 3
 
@@ -217,6 +219,9 @@ void GameView::updateCards() {
         item->setSelected(false);
     }
 
+    // Reset keyboard focus when cards change
+    m_keyboardFocusIndex = -1;
+
     clearCards();
 
     if (!m_game || !m_theme) return;
@@ -237,6 +242,19 @@ void GameView::updateCards() {
             item->setFaceUp(false);
             m_opponentCards[p].append(item);
         }
+    }
+
+    // Recreate trick cards if there's a current trick in progress
+    const Cards& trick = m_game->currentTrick();
+    const QVector<int>& trickPlayers = m_game->trickPlayers();
+    for (int i = 0; i < trick.size(); ++i) {
+        CardItem* item = createCardItem(trick[i]);
+        item->setFaceUp(true);
+        item->setInTrick(true);
+        item->setZValue(200 + i);
+        QPointF dest = trickCardPosition(trickPlayers[i]);
+        item->setPos(dest);
+        m_trickCards.append(item);
     }
 
     layoutCards();
@@ -462,6 +480,10 @@ void GameView::onCardsDealt() {
 }
 
 void GameView::onPassDirectionAnnounced(PassDirection dir) {
+    if (dir == PassDirection::None) {
+        showMessage("No passing this round - Hold", 1500);
+        return;
+    }
     showPassArrow(dir);
     showMessage("Select 3 cards to pass", 0);
 }
@@ -828,6 +850,7 @@ void GameView::showPassArrow(PassDirection dir) {
         case PassDirection::Left:   arrow = "\u2190"; break; // ←
         case PassDirection::Right:  arrow = "\u2192"; break; // →
         case PassDirection::Across: arrow = "\u2191"; break; // ↑
+        case PassDirection::None:   return; // No arrow for hold round
     }
 
     m_passArrow->setPlainText(arrow);
@@ -863,4 +886,86 @@ void GameView::showGameOver(int winner) {
     qreal tw = m_overlayText->boundingRect().width();
     qreal th = m_overlayText->boundingRect().height();
     m_overlayText->setPos((rect.width() - tw) / 2, (rect.height() - th) / 2);
+}
+
+void GameView::keyPressEvent(QKeyEvent* event) {
+    if (!m_game || m_inputBlocked) {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    GameState state = m_game->state();
+    if (state != GameState::WaitingForPass && state != GameState::WaitingForPlay) {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    if (m_playerCards.isEmpty()) {
+        QGraphicsView::keyPressEvent(event);
+        return;
+    }
+
+    switch (event->key()) {
+        case Qt::Key_Left:
+            if (m_keyboardFocusIndex <= 0) {
+                m_keyboardFocusIndex = m_playerCards.size() - 1;
+            } else {
+                m_keyboardFocusIndex--;
+            }
+            updateKeyboardFocus();
+            event->accept();
+            break;
+
+        case Qt::Key_Right:
+            if (m_keyboardFocusIndex >= m_playerCards.size() - 1) {
+                m_keyboardFocusIndex = 0;
+            } else {
+                m_keyboardFocusIndex++;
+            }
+            updateKeyboardFocus();
+            event->accept();
+            break;
+
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+        case Qt::Key_Space:
+            if (m_keyboardFocusIndex >= 0 && m_keyboardFocusIndex < m_playerCards.size()) {
+                selectFocusedCard();
+                event->accept();
+            }
+            break;
+
+        case Qt::Key_Home:
+            m_keyboardFocusIndex = 0;
+            updateKeyboardFocus();
+            event->accept();
+            break;
+
+        case Qt::Key_End:
+            m_keyboardFocusIndex = m_playerCards.size() - 1;
+            updateKeyboardFocus();
+            event->accept();
+            break;
+
+        default:
+            QGraphicsView::keyPressEvent(event);
+            break;
+    }
+}
+
+void GameView::updateKeyboardFocus() {
+    for (int i = 0; i < m_playerCards.size(); ++i) {
+        m_playerCards[i]->setKeyboardFocused(i == m_keyboardFocusIndex);
+    }
+}
+
+void GameView::selectFocusedCard() {
+    if (m_keyboardFocusIndex < 0 || m_keyboardFocusIndex >= m_playerCards.size()) {
+        return;
+    }
+
+    CardItem* item = m_playerCards[m_keyboardFocusIndex];
+
+    // Trigger the same logic as mouse click
+    onCardClicked(item);
 }

@@ -133,3 +133,55 @@ Card lowestOfSuit(const Cards& cards, Suit suit) {
     }
     return lowest;
 }
+
+Card highestCard(const Cards& cards) {
+    Card highest;
+    for (const Card& c : cards) {
+        if (!highest.isValid() || c.rank() > highest.rank()) {
+            highest = c;
+        }
+    }
+    return highest;
+}
+
+Card lowestCard(const Cards& cards) {
+    Card lowest;
+    for (const Card& c : cards) {
+        if (!lowest.isValid() || c.rank() < lowest.rank()) {
+            lowest = c;
+        }
+    }
+    return lowest;
+}
+
+Card highestBelow(const Cards& cards, Rank maxRank) {
+    Card best;
+    for (const Card& c : cards) {
+        if (c.rank() < maxRank) {
+            if (!best.isValid() || c.rank() > best.rank()) {
+                best = c;
+            }
+        }
+    }
+    return best;
+}
+
+Card lowestAbove(const Cards& cards, Rank minRank) {
+    Card best;
+    for (const Card& c : cards) {
+        if (c.rank() > minRank) {
+            if (!best.isValid() || c.rank() < best.rank()) {
+                best = c;
+            }
+        }
+    }
+    return best;
+}
+
+int countSuit(const Cards& cards, Suit suit) {
+    int count = 0;
+    for (const Card& c : cards) {
+        if (c.suit() == suit) count++;
+    }
+    return count;
+}
