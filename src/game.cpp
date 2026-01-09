@@ -117,6 +117,18 @@ void Game::startPassing() {
 
     // AI players select their pass cards immediately
     for (int i = 1; i < NUM_PLAYERS; ++i) {
+        // Provide game context for strategic pass decisions
+        GameContext ctx;
+        ctx.endScore = m_rules.endScore;
+        ctx.moonProtection = m_rules.moonProtection;
+        ctx.exactResetTo50 = m_rules.exactResetTo50;
+        ctx.roundNumber = m_roundNumber;
+        ctx.cardsRemaining = 13;
+        for (int j = 0; j < NUM_PLAYERS; ++j) {
+            ctx.playerScores[j] = m_players[j]->totalScore();
+            ctx.roundScores[j] = 0; // Round hasn't started yet
+        }
+        m_players[i]->setGameContext(ctx);
         m_passedCards[i] = m_players[i]->selectPassCards();
     }
 
@@ -283,6 +295,19 @@ void Game::aiTurn() {
     if (m_currentPlayer == 0) return; // Not AI's turn
 
     Player* ai = m_players[m_currentPlayer].get();
+
+    // Provide game context to AI for strategic decisions
+    GameContext ctx;
+    ctx.endScore = m_rules.endScore;
+    ctx.moonProtection = m_rules.moonProtection;
+    ctx.exactResetTo50 = m_rules.exactResetTo50;
+    ctx.roundNumber = m_roundNumber;
+    ctx.cardsRemaining = ai->hand().size();
+    for (int i = 0; i < NUM_PLAYERS; ++i) {
+        ctx.playerScores[i] = m_players[i]->totalScore();
+        ctx.roundScores[i] = m_players[i]->roundScore();
+    }
+    ai->setGameContext(ctx);
 
     Suit leadSuit = m_currentTrick.isEmpty() ? Suit::Clubs : m_leadSuit;
     Card card = ai->selectPlay(leadSuit, m_isFirstTrick, m_heartsBroken, m_currentTrick, m_trickPlayers);
@@ -558,6 +583,7 @@ void Game::saveSnapshot() {
         snapshot.playerStates[i].hand = m_players[i]->hand();
         snapshot.playerStates[i].roundScore = m_players[i]->roundScore();
         snapshot.playerStates[i].totalScore = m_players[i]->totalScore();
+        snapshot.playerStates[i].cardMemory = m_players[i]->cardMemory();
     }
 
     m_undoHistory.push(snapshot);
@@ -585,6 +611,7 @@ void Game::restoreSnapshot(const GameSnapshot& snapshot) {
         m_players[i]->setHand(snapshot.playerStates[i].hand);
         m_players[i]->setRoundScore(snapshot.playerStates[i].roundScore);
         m_players[i]->setTotalScore(snapshot.playerStates[i].totalScore);
+        m_players[i]->setCardMemory(snapshot.playerStates[i].cardMemory);
     }
 
     emit stateChanged(m_state);

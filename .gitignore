@@ -1,3 +1,11 @@
 Release/
 build/
 qt-hearts
+
+# Build artifacts
+*.o
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+Makefile
+.qmake.stash

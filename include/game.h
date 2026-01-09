@@ -53,6 +53,7 @@ struct GameSnapshot {
         Cards hand;
         int roundScore;
         int totalScore;
+        CardMemory cardMemory;  // AI card memory for proper undo
     };
     std::array<PlayerState, 4> playerStates;
 };

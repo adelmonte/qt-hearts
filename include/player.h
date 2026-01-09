@@ -14,6 +14,17 @@ enum class AIDifficulty {
     Hard
 };
 
+// Game context for AI strategic decisions
+struct GameContext {
+    int endScore = 100;              // Target score for game end
+    bool moonProtection = false;     // Shoot the moon protection rule
+    bool exactResetTo50 = false;     // Reset to 50 on exact endScore
+    int playerScores[4] = {0,0,0,0}; // Current total scores of all players
+    int roundScores[4] = {0,0,0,0};  // Current round scores
+    int roundNumber = 1;
+    int cardsRemaining = 13;         // Cards left in hand (for end-of-round decisions)
+};
+
 // Card memory for AI - tracks played cards and player voids
 struct CardMemory {
     QSet<Card> playedCards;           // All cards played this round
@@ -97,6 +108,11 @@ public:
     CardMemory& cardMemory() { return m_cardMemory; }
     const CardMemory& cardMemory() const { return m_cardMemory; }
     void resetCardMemory() { m_cardMemory.reset(); }
+    void setCardMemory(const CardMemory& mem) { m_cardMemory = mem; }
+
+    // Game context for AI strategic decisions
+    void setGameContext(const GameContext& ctx) { m_gameContext = ctx; }
+    const GameContext& gameContext() const { return m_gameContext; }
 
     // AI decision making
     Cards selectPassCards();
@@ -122,6 +138,7 @@ private:
     int m_totalScore;
     AIDifficulty m_difficulty;
     CardMemory m_cardMemory;
+    GameContext m_gameContext;
 
     // AI helpers
     Card aiSelectLead(const Cards& valid, bool heartsBroken);
@@ -134,6 +151,7 @@ private:
     Card aiSelectFollowEasy(const Cards& valid);
     Card aiSelectFollowHard(const Cards& valid, Suit leadSuit, const Cards& trickCards,
                             const QVector<int>& trickPlayers);
+    Card aiSelectSloughEasy(const Cards& valid);
     Card aiSelectSloughHard(const Cards& valid, const Cards& trickCards,
                             const QVector<int>& trickPlayers);
 
