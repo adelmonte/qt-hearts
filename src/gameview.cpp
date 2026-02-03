@@ -39,8 +39,9 @@ GameView::GameView(QWidget* parent)
     // Set background via scene brush - Qt optimizes this better than drawBackground()
     m_scene->setBackgroundBrush(QColor(35, 105, 35));
 
-    // For minimal update overhead
-    setViewportUpdateMode(QGraphicsView::BoundingRectViewportUpdate);
+    // MinimalViewportUpdate only redraws exact pixels that changed
+    // Better than BoundingRectViewportUpdate when items are spread across scene
+    setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
 
     // Cache the background so it's not redrawn every frame
     setCacheMode(QGraphicsView::CacheBackground);
