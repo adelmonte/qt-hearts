@@ -156,6 +156,9 @@ private:
     // Undo history
     QStack<GameSnapshot> m_undoHistory;
     static const int MAX_UNDO_HISTORY = 50;
+
+    // Generation counter to invalidate stale timer callbacks
+    int m_gameGeneration = 0;
 };
 
 #endif // GAME_H

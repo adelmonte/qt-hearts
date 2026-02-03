@@ -9,6 +9,8 @@
 #include <QGraphicsRectItem>
 #include <QKeyEvent>
 #include <QRadialGradient>
+#include <QAbstractAnimation>
+#include <QPointer>
 #include <memory>
 
 class CardItem;
@@ -49,6 +51,7 @@ private slots:
 
 public slots:
     void onUndoPerformed();
+    void onNewGame();  // Called when a new game starts to reset view state
 
 private:
     void createScene();
@@ -135,6 +138,15 @@ private:
 
     // Debounced resize relayout timer
     QTimer* m_resizeRelayoutTimer = nullptr;
+
+    // Track running animations so we can stop them on new game
+    QVector<QPointer<QAbstractAnimation>> m_runningAnimations;
+    void trackAnimation(QAbstractAnimation* anim);
+    void stopAllAnimations();
+    void resetViewState();
+
+    // Generation counter to ignore stale signals from previous game
+    int m_viewGeneration = 0;
 };
 
 #endif // GAMEVIEW_H

@@ -241,6 +241,7 @@ void MainWindow::loadTheme(const QString& themePath) {
 }
 
 void MainWindow::newGame() {
+    m_gameView->onNewGame();  // Reset view state before starting new game
     m_game->newGame();
 }
 

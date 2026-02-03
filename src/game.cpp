@@ -51,8 +51,17 @@ void Game::setState(GameState state) {
 }
 
 void Game::newGame() {
+    // Increment generation to invalidate any pending timer callbacks from previous game
+    m_gameGeneration++;
+
     m_roundNumber = 0;
     m_undoHistory.clear();
+
+    // Clear any in-progress state from previous game
+    m_currentTrick.clear();
+    m_trickPlayers.clear();
+    m_heartsBroken = false;
+    m_isFirstTrick = true;
 
     for (auto& p : m_players) {
         p->resetScores();
@@ -89,15 +98,24 @@ void Game::dealCards() {
 
     emit cardsDealt();
 
-    // Start passing
-    QTimer::singleShot(500, this, &Game::startPassing);
+    // Start passing (capture generation to detect if game was reset)
+    int gen = m_gameGeneration;
+    QTimer::singleShot(500, this, [this, gen]() {
+        if (gen == m_gameGeneration) startPassing();
+    });
 }
 
 void Game::startPassing() {
+    // Guard against stale calls after game reset
+    if (m_state != GameState::Dealing) return;
+
     // No passing on "None" rounds - go straight to playing
     if (m_passDirection == PassDirection::None) {
         emit passDirectionAnnounced(m_passDirection);
-        QTimer::singleShot(500, this, &Game::startPlaying);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(500, this, [this, gen]() {
+            if (gen == m_gameGeneration) startPlaying();
+        });
         return;
     }
 
@@ -174,10 +192,16 @@ void Game::executePassing() {
     emit passingComplete(humanReceivedCards);
 
     // Start playing (with longer delay to allow user to see received cards)
-    QTimer::singleShot(1500, this, &Game::startPlaying);
+    int gen = m_gameGeneration;
+    QTimer::singleShot(1500, this, [this, gen]() {
+        if (gen == m_gameGeneration) startPlaying();
+    });
 }
 
 void Game::startPlaying() {
+    // Guard against stale calls after game reset
+    if (m_state != GameState::Passing && m_state != GameState::WaitingForPass && m_state != GameState::Dealing) return;
+
     setState(GameState::Playing);
 
     m_heartsBroken = false;
@@ -199,7 +223,10 @@ void Game::startPlaying() {
     if (m_players[m_currentPlayer]->isHuman()) {
         setState(GameState::WaitingForPlay);
     } else {
-        QTimer::singleShot(500, this, &Game::aiTurn);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(500, this, [this, gen]() {
+            if (gen == m_gameGeneration) aiTurn();
+        });
     }
 }
 
@@ -278,6 +305,7 @@ void Game::humanPlayCard(const Card& card) {
 
 void Game::aiTurn() {
     if (m_currentPlayer == 0) return; // Not AI's turn
+    if (m_state != GameState::Playing) return; // Game was reset
 
     Player* ai = m_players[m_currentPlayer].get();
 
@@ -322,7 +350,10 @@ void Game::nextTurn() {
     // Check if trick is complete
     if (m_currentTrick.size() == NUM_PLAYERS) {
         // Longer delay so player can see the completed trick
-        QTimer::singleShot(1500, this, &Game::completeTrick);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(1500, this, [this, gen]() {
+            if (gen == m_gameGeneration) completeTrick();
+        });
         return;
     }
 
@@ -333,11 +364,18 @@ void Game::nextTurn() {
     if (m_players[m_currentPlayer]->isHuman()) {
         setState(GameState::WaitingForPlay);
     } else {
-        QTimer::singleShot(500, this, &Game::aiTurn);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(500, this, [this, gen]() {
+            if (gen == m_gameGeneration) aiTurn();
+        });
     }
 }
 
 void Game::completeTrick() {
+    // Guard against stale calls after game reset
+    if (m_state != GameState::Playing) return;
+    if (m_currentTrick.size() != NUM_PLAYERS) return; // Trick not complete
+
     setState(GameState::TrickComplete);
 
     int winner = determineTrickWinner();
@@ -359,7 +397,10 @@ void Game::completeTrick() {
 
     // Check if round is over
     if (m_players[0]->hand().isEmpty()) {
-        QTimer::singleShot(500, this, &Game::endRound);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(500, this, [this, gen]() {
+            if (gen == m_gameGeneration) endRound();
+        });
         return;
     }
 
@@ -372,7 +413,10 @@ void Game::completeTrick() {
     if (m_players[m_currentPlayer]->isHuman()) {
         setState(GameState::WaitingForPlay);
     } else {
-        QTimer::singleShot(500, this, &Game::aiTurn);
+        int gen = m_gameGeneration;
+        QTimer::singleShot(500, this, [this, gen]() {
+            if (gen == m_gameGeneration) aiTurn();
+        });
     }
 }
 
@@ -405,6 +449,9 @@ void Game::updateHeartsBroken(const Card& card) {
 }
 
 void Game::endRound() {
+    // Guard against stale calls after game reset
+    if (m_state != GameState::TrickComplete) return;
+
     setState(GameState::RoundComplete);
 
     // Check for Full Polish BEFORE applying round scores
@@ -497,7 +544,10 @@ void Game::endRound() {
     }
 
     // Start next round
-    QTimer::singleShot(2000, this, &Game::dealCards);
+    int gen = m_gameGeneration;
+    QTimer::singleShot(2000, this, [this, gen]() {
+        if (gen == m_gameGeneration) dealCards();
+    });
 }
 
 void Game::endGame() {

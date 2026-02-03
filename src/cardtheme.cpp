@@ -8,6 +8,7 @@
 #include <QPainterPath>
 #include <QLinearGradient>
 #include <QRadialGradient>
+#include <QApplication>
 
 CardTheme::CardTheme()
     : m_loaded(false)
@@ -162,12 +163,15 @@ QPixmap CardTheme::renderSvgElement(const QString& elementId, const QSize& size)
         return QPixmap();
     }
 
-    QString cacheKey = elementId + "_" + QString::number(size.width()) + "x" + QString::number(size.height());
+    qreal dpr = qApp->devicePixelRatio();
+    QString cacheKey = elementId + "_" + QString::number(size.width()) + "x" + QString::number(size.height()) + "@" + QString::number(dpr);
     if (m_cache.contains(cacheKey)) {
         return m_cache[cacheKey];
     }
 
-    QPixmap pixmap(size);
+    // Create HiDPI-aware pixmap
+    QPixmap pixmap(size * dpr);
+    pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
     QPainter painter(&pixmap);
@@ -229,12 +233,14 @@ QPixmap CardTheme::cardBack(const QSize& size) {
 }
 
 QPixmap CardTheme::generateCard(const Card& card, const QSize& size) {
-    QString cacheKey = "gen_" + card.elementId() + "_" + QString::number(size.width()) + "x" + QString::number(size.height());
+    qreal dpr = qApp->devicePixelRatio();
+    QString cacheKey = "gen_" + card.elementId() + "_" + QString::number(size.width()) + "x" + QString::number(size.height()) + "@" + QString::number(dpr);
     if (m_cache.contains(cacheKey)) {
         return m_cache[cacheKey];
     }
 
-    QPixmap pixmap(size);
+    QPixmap pixmap(size * dpr);
+    pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
     QPainter painter(&pixmap);
@@ -349,12 +355,14 @@ void CardTheme::drawSuitSymbol(QPainter& painter, Suit suit, const QRectF& rect,
 }
 
 QPixmap CardTheme::generateCardBack(const QSize& size) {
-    QString cacheKey = "back_" + QString::number(size.width()) + "x" + QString::number(size.height());
+    qreal dpr = qApp->devicePixelRatio();
+    QString cacheKey = "back_" + QString::number(size.width()) + "x" + QString::number(size.height()) + "@" + QString::number(dpr);
     if (m_cache.contains(cacheKey)) {
         return m_cache[cacheKey];
     }
 
-    QPixmap pixmap(size);
+    QPixmap pixmap(size * dpr);
+    pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
     QPainter painter(&pixmap);

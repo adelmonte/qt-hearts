@@ -36,7 +36,7 @@ GameView::GameView(QWidget* parent)
     setScene(m_scene);
     setRenderHint(QPainter::Antialiasing);
     setRenderHint(QPainter::SmoothPixmapTransform);
-    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setFrameStyle(QFrame::NoFrame);
@@ -114,15 +114,17 @@ void GameView::setGame(Game* game) {
     m_game = game;
 
     if (m_game) {
+        // Connect all game signals directly - the Game-side generation checks
+        // and state guards prevent stale callbacks from doing anything harmful
         connect(m_game, &Game::stateChanged, this, &GameView::onStateChanged);
         connect(m_game, &Game::cardsDealt, this, &GameView::onCardsDealt);
+        connect(m_game, &Game::scoresChanged, this, &GameView::onScoresChanged);
         connect(m_game, &Game::passDirectionAnnounced, this, &GameView::onPassDirectionAnnounced);
         connect(m_game, &Game::passingComplete, this, &GameView::onPassingComplete);
         connect(m_game, &Game::cardPlayed, this, &GameView::onCardPlayed);
         connect(m_game, &Game::trickWon, this, &GameView::onTrickWon);
         connect(m_game, &Game::roundEnded, this, &GameView::onRoundEnded);
         connect(m_game, &Game::gameEnded, this, &GameView::onGameEnded);
-        connect(m_game, &Game::scoresChanged, this, &GameView::onScoresChanged);
         connect(m_game, &Game::currentPlayerChanged, this, &GameView::onCurrentPlayerChanged);
         connect(m_game, &Game::heartsBrokenSignal, this, &GameView::onHeartsBroken);
     }
@@ -435,6 +437,7 @@ void GameView::layoutPlayerHand(bool animate) {
             anim->setDuration(150);
             anim->setEndValue(targetPos);
             anim->setEasingCurve(QEasingCurve::OutCubic);
+            trackAnimation(anim);
             anim->start(QAbstractAnimation::DeleteWhenStopped);
         } else {
             m_playerCards[i]->setPos(targetPos);
@@ -713,6 +716,7 @@ void GameView::onPassingComplete(Cards receivedCards) {
             QSequentialAnimationGroup* sequence = new QSequentialAnimationGroup(this);
             sequence->addAnimation(throwGroup);
             sequence->addAnimation(pushGroup);
+            trackAnimation(sequence);
             sequence->start(QAbstractAnimation::DeleteWhenStopped);
         }
     } else if (!receivedItems.isEmpty()) {
@@ -760,6 +764,7 @@ void GameView::clearReceivedCardHighlight() {
                 QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
                 group->addAnimation(slideBack);
                 group->addAnimation(rotateBack);
+                trackAnimation(group);
                 group->start(QAbstractAnimation::DeleteWhenStopped);
             } else {
                 item->setPos(targetPos);
@@ -854,9 +859,11 @@ void GameView::onCardPlayed(int player, Card card) {
                     QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
                     group->addAnimation(posAnim);
                     group->addAnimation(rotAnim);
+                    trackAnimation(group);
                     group->start(QAbstractAnimation::DeleteWhenStopped);
                 } else {
                     item->setRotation(0);
+                    trackAnimation(posAnim);
                     posAnim->start(QAbstractAnimation::DeleteWhenStopped);
                 }
                 break;
@@ -916,6 +923,7 @@ void GameView::onCardPlayed(int player, Card card) {
             QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
             group->addAnimation(posAnim);
             group->addAnimation(rotAnim);
+            trackAnimation(group);
             group->start(QAbstractAnimation::DeleteWhenStopped);
         } else {
             // No animation - place card directly
@@ -965,6 +973,7 @@ void GameView::onTrickWon(int winner, int points) {
         // Don't clear m_trickCards - it may already have new cards from rapid play
     });
 
+    trackAnimation(group);
     group->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
@@ -1234,4 +1243,66 @@ void GameView::selectFocusedCard() {
 
     // Trigger the same logic as mouse click
     onCardClicked(item);
+}
+
+void GameView::trackAnimation(QAbstractAnimation* anim) {
+    // Clean up finished animations from the list
+    m_runningAnimations.erase(
+        std::remove_if(m_runningAnimations.begin(), m_runningAnimations.end(),
+            [](const QPointer<QAbstractAnimation>& p) { return p.isNull(); }),
+        m_runningAnimations.end());
+
+    m_runningAnimations.append(QPointer<QAbstractAnimation>(anim));
+}
+
+void GameView::stopAllAnimations() {
+    for (auto& animPtr : m_runningAnimations) {
+        if (animPtr) {
+            animPtr->stop();
+        }
+    }
+    m_runningAnimations.clear();
+}
+
+void GameView::resetViewState() {
+    // Increment generation to ignore any pending signals from old game
+    m_viewGeneration++;
+
+    // Stop all running animations
+    stopAllAnimations();
+
+    // Cancel pending timers
+    if (m_receivedHighlightTimer) {
+        m_receivedHighlightTimer->stop();
+        delete m_receivedHighlightTimer;
+        m_receivedHighlightTimer = nullptr;
+    }
+
+    if (m_resizeRelayoutTimer) {
+        m_resizeRelayoutTimer->stop();
+        m_resizeRelayoutTimer->deleteLater();
+        m_resizeRelayoutTimer = nullptr;
+    }
+
+    // Reset state flags
+    m_selectedPassCards.clear();
+    m_receivedCards.clear();
+    m_currentPassDirection = PassDirection::None;
+    m_inputBlocked = false;
+    m_showingReceivedCards = false;
+    m_passConfirmed = false;
+    m_keyboardFocusIndex = -1;
+
+    // Hide UI overlays
+    hideMessage();
+    hidePassArrow();
+    m_overlay->setVisible(false);
+    m_overlayText->setVisible(false);
+
+    // Clear all cards
+    clearCards();
+}
+
+void GameView::onNewGame() {
+    resetViewState();
 }
