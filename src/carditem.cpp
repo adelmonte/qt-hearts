@@ -19,8 +19,7 @@ CardItem::CardItem(const Card& card, CardTheme* theme, QGraphicsItem* parent)
 {
     setAcceptHoverEvents(true);
     setFlag(QGraphicsItem::ItemIsSelectable, false);
-    // Cache the rendered card - ItemCoordinateCache handles rotations during animation
-    setCacheMode(QGraphicsItem::ItemCoordinateCache);
+    // No caching - cards are already pre-rendered pixmaps, double-caching hurts at large sizes
     updatePixmap();
 }
 

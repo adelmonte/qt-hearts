@@ -38,6 +38,10 @@ GameView::GameView(QWidget* parent)
 {
     setScene(m_scene);
 
+    // Disable BSP tree indexing - causes stutters when items move during animation
+    // Linear search is faster for small item counts like a card game
+    m_scene->setItemIndexMethod(QGraphicsScene::NoIndex);
+
     // Set background via scene brush - Qt optimizes this better than drawBackground()
     m_scene->setBackgroundBrush(QColor(35, 105, 35));
 
@@ -49,8 +53,8 @@ GameView::GameView(QWidget* parent)
     glWidget->setFormat(format);
     setViewport(glWidget);
 
-    // FullViewportUpdate works best with OpenGL - avoids dirty region calculation overhead
-    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    // MinimalViewportUpdate - only redraw changed regions, even with OpenGL
+    setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
 
     // Cache the background so it's not redrawn every frame
     setCacheMode(QGraphicsView::CacheBackground);
