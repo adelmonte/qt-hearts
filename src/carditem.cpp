@@ -43,9 +43,11 @@ void CardItem::setSelected(bool selected) {
 }
 
 void CardItem::setPlayable(bool playable) {
-    m_playable = playable;
-    setCursor(playable ? Qt::PointingHandCursor : Qt::ArrowCursor);
-    update();
+    if (m_playable != playable) {
+        m_playable = playable;
+        setCursor(playable ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        update();
+    }
 }
 
 void CardItem::resetVisualState() {

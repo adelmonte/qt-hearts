@@ -8,6 +8,7 @@
 #include <QGraphicsTextItem>
 #include <QGraphicsRectItem>
 #include <QKeyEvent>
+#include <QRadialGradient>
 #include <memory>
 
 class CardItem;
@@ -127,6 +128,13 @@ private:
     bool m_animateCardRotation;
     bool m_animateAICards;
     bool m_animatePassingCards;
+
+    // Cached background gradient (avoid recreating every drawBackground call)
+    QRadialGradient m_cachedBgGradient;
+    QSizeF m_cachedBgSize;
+
+    // Debounced resize relayout timer
+    QTimer* m_resizeRelayoutTimer = nullptr;
 };
 
 #endif // GAMEVIEW_H

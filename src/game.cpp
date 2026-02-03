@@ -20,12 +20,6 @@ Game::Game(QObject* parent)
     m_passedCards.resize(NUM_PLAYERS);
 }
 
-void Game::setPlayerName(int index, const QString& name) {
-    if (index >= 0 && index < NUM_PLAYERS) {
-        // Can't change name of existing player, but we track it
-    }
-}
-
 void Game::setAIDifficulty(AIDifficulty difficulty) {
     for (int i = 1; i < NUM_PLAYERS; ++i) {
         m_players[i]->setDifficulty(difficulty);
@@ -275,16 +269,7 @@ void Game::humanPlayCard(const Card& card) {
         m_players[i]->cardMemory().recordCard(card, 0, m_leadSuit);
     }
 
-    // Check if hearts broken - Q♠ only breaks hearts if rule enabled
-    if (!m_heartsBroken) {
-        if (card.isHeart()) {
-            m_heartsBroken = true;
-            emit heartsBrokenSignal();
-        } else if (card.isQueenOfSpades() && m_rules.queenBreaksHearts) {
-            m_heartsBroken = true;
-            emit heartsBrokenSignal();
-        }
-    }
+    updateHeartsBroken(card);
 
     emit cardPlayed(0, card);
 
@@ -326,16 +311,7 @@ void Game::aiTurn() {
         m_players[i]->cardMemory().recordCard(card, m_currentPlayer, m_leadSuit);
     }
 
-    // Check if hearts broken - Q♠ only breaks hearts if rule enabled
-    if (!m_heartsBroken) {
-        if (card.isHeart()) {
-            m_heartsBroken = true;
-            emit heartsBrokenSignal();
-        } else if (card.isQueenOfSpades() && m_rules.queenBreaksHearts) {
-            m_heartsBroken = true;
-            emit heartsBrokenSignal();
-        }
-    }
+    updateHeartsBroken(card);
 
     emit cardPlayed(m_currentPlayer, card);
 
@@ -416,23 +392,16 @@ int Game::determineTrickWinner() const {
     return winner;
 }
 
-bool Game::checkShootTheMoon() {
-    // Check if anyone got all 26 points
-    for (int i = 0; i < NUM_PLAYERS; ++i) {
-        if (m_players[i]->roundScore() == 26) {
-            // Shoot the moon! Give 26 to everyone else
-            for (int j = 0; j < NUM_PLAYERS; ++j) {
-                if (j == i) {
-                    // Reset shooter's round score to 0
-                    // (it's currently 26, so subtract 26)
-                } else {
-                    m_players[j]->addRoundPoints(26 - m_players[j]->roundScore() + 26);
-                }
-            }
-            return true;
+void Game::updateHeartsBroken(const Card& card) {
+    if (!m_heartsBroken) {
+        if (card.isHeart()) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
+        } else if (card.isQueenOfSpades() && m_rules.queenBreaksHearts) {
+            m_heartsBroken = true;
+            emit heartsBrokenSignal();
         }
     }
-    return false;
 }
 
 void Game::endRound() {

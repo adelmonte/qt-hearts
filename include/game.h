@@ -69,7 +69,6 @@ public:
 
     // Game control
     void newGame();
-    void setPlayerName(int index, const QString& name);
     void setAIDifficulty(AIDifficulty difficulty);
     AIDifficulty aiDifficulty() const;
 
@@ -132,7 +131,7 @@ private:
     void endGame();
     int determineTrickWinner() const;
     int findTwoOfClubsPlayer() const;
-    bool checkShootTheMoon();
+    void updateHeartsBroken(const Card& card);
 
     // Undo helpers
     void saveSnapshot();

@@ -204,42 +204,58 @@ void GameView::resizeEvent(QResizeEvent* event) {
         m_passArrow->setPos((w - arrowWidth) / 2, h * 0.3);
     }
 
-    // Schedule a delayed relayout to correct any cards that were mid-animation
-    QTimer::singleShot(250, this, [this]() {
+    // Schedule a delayed relayout to correct any cards that were mid-animation,
+    // cancelling any previously pending relayout to avoid redundant work
+    if (m_resizeRelayoutTimer) {
+        m_resizeRelayoutTimer->stop();
+        m_resizeRelayoutTimer->deleteLater();
+    }
+    m_resizeRelayoutTimer = new QTimer(this);
+    m_resizeRelayoutTimer->setSingleShot(true);
+    connect(m_resizeRelayoutTimer, &QTimer::timeout, this, [this]() {
         layoutTrickCards();
+        m_resizeRelayoutTimer = nullptr;
     });
+    m_resizeRelayoutTimer->start(250);
 }
 
 void GameView::drawBackground(QPainter* painter, const QRectF& rect) {
-    // Green felt background
-    QRadialGradient gradient(rect.center(), std::max(rect.width(), rect.height()) * 0.7);
-    gradient.setColorAt(0.0, QColor(45, 130, 45));
-    gradient.setColorAt(0.5, QColor(35, 105, 35));
-    gradient.setColorAt(1.0, QColor(25, 80, 25));
-    painter->fillRect(rect, gradient);
+    // Green felt background - use cached gradient to avoid recreating every frame
+    QSizeF currentSize(rect.width(), rect.height());
+    if (m_cachedBgSize != currentSize) {
+        m_cachedBgSize = currentSize;
+        m_cachedBgGradient = QRadialGradient(rect.center(), std::max(rect.width(), rect.height()) * 0.7);
+        m_cachedBgGradient.setColorAt(0.0, QColor(45, 130, 45));
+        m_cachedBgGradient.setColorAt(0.5, QColor(35, 105, 35));
+        m_cachedBgGradient.setColorAt(1.0, QColor(25, 80, 25));
+    }
+    painter->fillRect(rect, m_cachedBgGradient);
 }
 
 void GameView::clearCards() {
-    // Clear tracked card vectors
+    // Collect all tracked cards for deletion, avoiding duplicates
+    QSet<CardItem*> cardsToDelete;
+
+    for (CardItem* card : m_playerCards) {
+        cardsToDelete.insert(card);
+    }
+    for (auto& hand : m_opponentCards) {
+        for (CardItem* card : hand) {
+            cardsToDelete.insert(card);
+        }
+    }
+    for (CardItem* card : m_trickCards) {
+        cardsToDelete.insert(card);
+    }
+
+    // Clear tracked vectors first
     m_playerCards.clear();
     m_trickCards.clear();
     for (auto& hand : m_opponentCards) {
         hand.clear();
     }
 
-    // Remove ALL CardItem objects from the scene (including orphaned animated cards)
-    // CardItem inherits from QGraphicsObject, so we can use qobject_cast
-    QList<QGraphicsItem*> items = m_scene->items();
-    QList<CardItem*> cardsToDelete;
-    for (QGraphicsItem* item : items) {
-        QGraphicsObject* obj = item->toGraphicsObject();
-        if (obj) {
-            CardItem* card = qobject_cast<CardItem*>(obj);
-            if (card) {
-                cardsToDelete.append(card);
-            }
-        }
-    }
+    // Delete all collected cards
     for (CardItem* card : cardsToDelete) {
         m_scene->removeItem(card);
         delete card;
@@ -247,6 +263,7 @@ void GameView::clearCards() {
 }
 
 CardItem* GameView::createCardItem(const Card& card) {
+    if (!m_theme) return nullptr;
     CardItem* item = new CardItem(card, m_theme);
     item->setCardSize(QSize(static_cast<int>(m_cardWidth), static_cast<int>(m_cardHeight)));
     connect(item, &CardItem::clicked, this, &GameView::onCardClicked);

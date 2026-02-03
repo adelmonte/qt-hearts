@@ -31,17 +31,20 @@ struct CardMemory {
     QMap<Suit, QSet<int>> voidPlayers; // Players known to be void in suit
     bool queenSpadesPlayed = false;    // Quick check for Q♠
     int pointsPlayedThisRound = 0;     // Track total points played
+    int suitPlayedCounts[4] = {0, 0, 0, 0}; // Pre-indexed count per suit
 
     void reset() {
         playedCards.clear();
         voidPlayers.clear();
         queenSpadesPlayed = false;
         pointsPlayedThisRound = 0;
+        for (int i = 0; i < 4; ++i) suitPlayedCounts[i] = 0;
     }
 
     void recordCard(const Card& card, int player, Suit leadSuit) {
         playedCards.insert(card);
         pointsPlayedThisRound += card.pointValue();
+        suitPlayedCounts[static_cast<int>(card.suit())]++;
         if (card.isQueenOfSpades()) {
             queenSpadesPlayed = true;
         }
@@ -60,19 +63,14 @@ struct CardMemory {
     }
 
     int countPlayedInSuit(Suit suit) const {
-        int count = 0;
-        for (const Card& c : playedCards) {
-            if (c.suit() == suit) count++;
-        }
-        return count;
+        return suitPlayedCounts[static_cast<int>(suit)];
     }
 
     // Count how many cards above a given rank are still out in a suit
     int countHigherCardsOut(Suit suit, Rank rank) const {
         int count = 0;
         for (int r = static_cast<int>(rank) + 1; r <= static_cast<int>(Rank::Ace); ++r) {
-            Card c(suit, static_cast<Rank>(r));
-            if (!playedCards.contains(c)) count++;
+            if (!playedCards.contains(Card(suit, static_cast<Rank>(r)))) count++;
         }
         return count;
     }
