@@ -7,6 +7,8 @@
 #include <QParallelAnimationGroup>
 #include <QSequentialAnimationGroup>
 #include <QRandomGenerator>
+#include <QOpenGLWidget>
+#include <QSurfaceFormat>
 #include <cmath>
 
 
@@ -39,14 +41,23 @@ GameView::GameView(QWidget* parent)
     // Set background via scene brush - Qt optimizes this better than drawBackground()
     m_scene->setBackgroundBrush(QColor(35, 105, 35));
 
-    // MinimalViewportUpdate only redraws exact pixels that changed
-    // Better than BoundingRectViewportUpdate when items are spread across scene
-    setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
+    // OpenGL viewport with vsync for smooth Wayland compositor sync
+    QSurfaceFormat format;
+    format.setSwapInterval(1);  // Vsync - sync to compositor frame timing
+    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+    QOpenGLWidget* glWidget = new QOpenGLWidget();
+    glWidget->setFormat(format);
+    setViewport(glWidget);
+
+    // FullViewportUpdate works best with OpenGL - avoids dirty region calculation overhead
+    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 
     // Cache the background so it's not redrawn every frame
     setCacheMode(QGraphicsView::CacheBackground);
-    setOptimizationFlag(QGraphicsView::DontSavePainterState, true);
-    setOptimizationFlag(QGraphicsView::DontAdjustForAntialiasing, true);
+
+    // Enable antialiasing for smooth subpixel rendering during animation
+    setRenderHint(QPainter::Antialiasing, true);
+    setRenderHint(QPainter::SmoothPixmapTransform, true);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setFrameStyle(QFrame::NoFrame);
@@ -433,7 +444,7 @@ void GameView::layoutPlayerHand(bool animate) {
             QPropertyAnimation* anim = new QPropertyAnimation(m_playerCards[i], "pos");
             anim->setDuration(100);
             anim->setEndValue(targetPos);
-            anim->setEasingCurve(QEasingCurve::OutCubic);
+            anim->setEasingCurve(QEasingCurve::OutQuad);
             trackAnimation(anim);
             anim->start(QAbstractAnimation::DeleteWhenStopped);
         } else {
@@ -675,13 +686,13 @@ void GameView::onPassingComplete(Cards receivedCards) {
             throwAnim->setDuration(150);
             throwAnim->setStartValue(throwFrom);
             throwAnim->setEndValue(handPos);
-            throwAnim->setEasingCurve(QEasingCurve::OutCubic);
+            throwAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             QPropertyAnimation* rotateAnim = new QPropertyAnimation(item, "rotation");
             rotateAnim->setDuration(150);
             rotateAnim->setStartValue(startRotation);
             rotateAnim->setEndValue(0.0);
-            rotateAnim->setEasingCurve(QEasingCurve::OutCubic);
+            rotateAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             // Flip face up partway through
             QTimer::singleShot(75, item, [item]() {
@@ -697,13 +708,13 @@ void GameView::onPassingComplete(Cards receivedCards) {
             pushAnim->setDuration(80);
             pushAnim->setStartValue(handPos);
             pushAnim->setEndValue(pushedPos);
-            pushAnim->setEasingCurve(QEasingCurve::OutCubic);
+            pushAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             QPropertyAnimation* wobbleAnim = new QPropertyAnimation(item, "rotation");
             wobbleAnim->setDuration(80);
             wobbleAnim->setStartValue(0.0);
             wobbleAnim->setEndValue(endRotation);
-            wobbleAnim->setEasingCurve(QEasingCurve::OutCubic);
+            wobbleAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             QParallelAnimationGroup* pushGroup = new QParallelAnimationGroup(this);
             pushGroup->addAnimation(pushAnim);
@@ -751,12 +762,12 @@ void GameView::clearReceivedCardHighlight() {
                 QPropertyAnimation* slideBack = new QPropertyAnimation(item, "pos");
                 slideBack->setDuration(120);
                 slideBack->setEndValue(targetPos);
-                slideBack->setEasingCurve(QEasingCurve::OutCubic);
+                slideBack->setEasingCurve(QEasingCurve::OutQuad);
 
                 QPropertyAnimation* rotateBack = new QPropertyAnimation(item, "rotation");
                 rotateBack->setDuration(120);
                 rotateBack->setEndValue(0.0);
-                rotateBack->setEasingCurve(QEasingCurve::OutCubic);
+                rotateBack->setEasingCurve(QEasingCurve::OutQuad);
 
                 QParallelAnimationGroup* group = new QParallelAnimationGroup(this);
                 group->addAnimation(slideBack);
@@ -842,14 +853,14 @@ void GameView::onCardPlayed(int player, Card card) {
                 QPointF dest = trickCardPosition(player);
 
                 QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
-                posAnim->setDuration(120);
+                posAnim->setDuration(180);
                 posAnim->setStartValue(startPos);
                 posAnim->setEndValue(dest);
 
                 if (m_animateCardRotation) {
                     qreal trickRotation = QRandomGenerator::global()->bounded(11) - 5;  // Random rotation -5 to +5 degrees
                     QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
-                    rotAnim->setDuration(120);
+                    rotAnim->setDuration(180);
                     rotAnim->setStartValue(0.0);
                     rotAnim->setEndValue(trickRotation);
 
@@ -900,17 +911,17 @@ void GameView::onCardPlayed(int player, Card card) {
 
             // Animate position from hand to trick area
             QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
-            posAnim->setDuration(120);
+            posAnim->setDuration(180);
             posAnim->setStartValue(startPos);
             posAnim->setEndValue(dest);
-            posAnim->setEasingCurve(QEasingCurve::OutCubic);
+            posAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             // Animate rotation
             QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
-            rotAnim->setDuration(120);
+            rotAnim->setDuration(180);
             rotAnim->setStartValue(startRotation);
             rotAnim->setEndValue(endRotation);
-            rotAnim->setEasingCurve(QEasingCurve::OutCubic);
+            rotAnim->setEasingCurve(QEasingCurve::OutQuad);
 
             // Flip the card face-up partway through the animation
             QTimer::singleShot(60, item, [item]() {
