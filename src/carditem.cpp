@@ -102,66 +102,31 @@ QRectF CardItem::boundingRect() const {
 }
 
 void CardItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    painter->setRenderHint(QPainter::Antialiasing);
-    painter->setRenderHint(QPainter::SmoothPixmapTransform);
-
-    qreal yOffset = 0;
-
-    // Selected cards float up
-    if (m_selected) {
-        yOffset = -15;
-    } else if ((m_hovered || m_keyboardFocused) && m_playable) {
-        yOffset = -8;
-    }
-
-    QRectF cardRect(2, 2 + yOffset, m_size.width(), m_size.height());
-
-    // Draw shadow
-    if (yOffset != 0) {
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(0, 0, 0, 40));
-        painter->drawRoundedRect(cardRect.translated(3, 3 - yOffset), 5, 5);
-    }
-
-    // Draw card
+    // Minimal paint - just blit the pre-rendered pixmap
     const QPixmap& pixmap = m_faceUp ? m_frontPixmap : m_backPixmap;
     if (!pixmap.isNull()) {
-        painter->drawPixmap(cardRect.toRect(), pixmap);
-    } else {
-        // Fallback rectangle
-        painter->setBrush(m_faceUp ? Qt::white : QColor(30, 60, 140));
-        painter->setPen(QPen(Qt::black, 1));
-        painter->drawRoundedRect(cardRect, 5, 5);
+        painter->drawPixmap(2, 2, pixmap);
     }
 
-    // Highlight for playable cards (hover or keyboard focus)
-    if (m_playable && (m_hovered || m_keyboardFocused)) {
-        QColor highlightColor = m_keyboardFocused ? QColor(255, 220, 100) : QColor(100, 200, 100);
-        painter->setPen(QPen(highlightColor, 3));
+    // Only draw overlays when needed (these are rare states)
+    if (m_selected || m_received || ((m_hovered || m_keyboardFocused) && m_playable)) {
+        QRectF cardRect(2, 2, m_size.width(), m_size.height());
+        QColor borderColor;
+        if (m_received) {
+            borderColor = QColor(255, 200, 50);
+        } else if (m_selected) {
+            borderColor = QColor(50, 150, 255);
+        } else {
+            borderColor = m_keyboardFocused ? QColor(255, 220, 100) : QColor(100, 200, 100);
+        }
+        painter->setPen(QPen(borderColor, 3));
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(cardRect.adjusted(-1, -1, 1, 1), 6, 6);
     }
 
-    // Selection indicator
-    if (m_selected) {
-        painter->setPen(QPen(QColor(50, 150, 255), 3));
-        painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(cardRect.adjusted(-1, -1, 1, 1), 6, 6);
-    }
-
-    // Received card indicator (golden glow)
-    if (m_received) {
-        painter->setPen(QPen(QColor(255, 200, 50), 3));
-        painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(cardRect.adjusted(-1, -1, 1, 1), 6, 6);
-        // Add a subtle glow effect
-        painter->setPen(QPen(QColor(255, 200, 50, 100), 5));
-        painter->drawRoundedRect(cardRect.adjusted(-2, -2, 2, 2), 7, 7);
-    }
-
-    // Dim non-playable cards when it's player's turn (but not cards in the trick area or received cards)
+    // Dim non-playable cards
     if (!m_playable && m_faceUp && !m_inTrick && !m_received) {
-        painter->fillRect(cardRect, QColor(0, 0, 0, 60));
+        painter->fillRect(QRectF(2, 2, m_size.width(), m_size.height()), QColor(0, 0, 0, 60));
     }
 }
 

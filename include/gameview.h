@@ -8,10 +8,8 @@
 #include <QGraphicsTextItem>
 #include <QGraphicsRectItem>
 #include <QKeyEvent>
-#include <QRadialGradient>
 #include <QAbstractAnimation>
 #include <QPointer>
-#include <memory>
 
 class CardItem;
 
@@ -30,7 +28,6 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
-    void drawBackground(QPainter* painter, const QRectF& rect) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
@@ -59,7 +56,6 @@ private:
     void updateCards();
     void updatePlayerHand();
     void updateOpponentHands();
-    void updateTrickArea();
     void updateScoreboards();
     void updatePlayableCards();
 
@@ -69,8 +65,6 @@ private:
     void layoutScoreboards();
     void layoutTrickCards();
 
-    QPointF playerHandPosition() const;
-    QPointF opponentHandPosition(int player) const;
     QPointF trickCardPosition(int player) const;
     QPointF scoreboardPosition(int player) const;
     QPointF opponentHandCenter(int player) const;
@@ -131,10 +125,6 @@ private:
     bool m_animateCardRotation;
     bool m_animateAICards;
     bool m_animatePassingCards;
-
-    // Cached background gradient (avoid recreating every drawBackground call)
-    QRadialGradient m_cachedBgGradient;
-    QSizeF m_cachedBgSize;
 
     // Debounced resize relayout timer
     QTimer* m_resizeRelayoutTimer = nullptr;

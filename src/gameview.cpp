@@ -9,6 +9,7 @@
 #include <QRandomGenerator>
 #include <cmath>
 
+
 GameView::GameView(QWidget* parent)
     : QGraphicsView(parent)
     , m_game(nullptr)
@@ -34,9 +35,17 @@ GameView::GameView(QWidget* parent)
     , m_animatePassingCards(true)
 {
     setScene(m_scene);
-    setRenderHint(QPainter::Antialiasing);
-    setRenderHint(QPainter::SmoothPixmapTransform);
-    setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
+
+    // Set background via scene brush - Qt optimizes this better than drawBackground()
+    m_scene->setBackgroundBrush(QColor(35, 105, 35));
+
+    // For minimal update overhead
+    setViewportUpdateMode(QGraphicsView::BoundingRectViewportUpdate);
+
+    // Cache the background so it's not redrawn every frame
+    setCacheMode(QGraphicsView::CacheBackground);
+    setOptimizationFlag(QGraphicsView::DontSavePainterState, true);
+    setOptimizationFlag(QGraphicsView::DontAdjustForAntialiasing, true);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setFrameStyle(QFrame::NoFrame);
@@ -219,19 +228,6 @@ void GameView::resizeEvent(QResizeEvent* event) {
         m_resizeRelayoutTimer = nullptr;
     });
     m_resizeRelayoutTimer->start(250);
-}
-
-void GameView::drawBackground(QPainter* painter, const QRectF& rect) {
-    // Green felt background - use cached gradient to avoid recreating every frame
-    QSizeF currentSize(rect.width(), rect.height());
-    if (m_cachedBgSize != currentSize) {
-        m_cachedBgSize = currentSize;
-        m_cachedBgGradient = QRadialGradient(rect.center(), std::max(rect.width(), rect.height()) * 0.7);
-        m_cachedBgGradient.setColorAt(0.0, QColor(45, 130, 45));
-        m_cachedBgGradient.setColorAt(0.5, QColor(35, 105, 35));
-        m_cachedBgGradient.setColorAt(1.0, QColor(25, 80, 25));
-    }
-    painter->fillRect(rect, m_cachedBgGradient);
 }
 
 void GameView::clearCards() {
@@ -434,7 +430,7 @@ void GameView::layoutPlayerHand(bool animate) {
 
         if (animate && m_playerCards[i]->pos() != targetPos) {
             QPropertyAnimation* anim = new QPropertyAnimation(m_playerCards[i], "pos");
-            anim->setDuration(150);
+            anim->setDuration(100);
             anim->setEndValue(targetPos);
             anim->setEasingCurve(QEasingCurve::OutCubic);
             trackAnimation(anim);
@@ -675,19 +671,19 @@ void GameView::onPassingComplete(Cards receivedCards) {
 
             // Phase 1: Throw from opponent to hand position
             QPropertyAnimation* throwAnim = new QPropertyAnimation(item, "pos");
-            throwAnim->setDuration(250);
+            throwAnim->setDuration(150);
             throwAnim->setStartValue(throwFrom);
             throwAnim->setEndValue(handPos);
             throwAnim->setEasingCurve(QEasingCurve::OutCubic);
 
             QPropertyAnimation* rotateAnim = new QPropertyAnimation(item, "rotation");
-            rotateAnim->setDuration(250);
+            rotateAnim->setDuration(150);
             rotateAnim->setStartValue(startRotation);
             rotateAnim->setEndValue(0.0);
             rotateAnim->setEasingCurve(QEasingCurve::OutCubic);
 
             // Flip face up partway through
-            QTimer::singleShot(125, item, [item]() {
+            QTimer::singleShot(75, item, [item]() {
                 item->setFaceUp(true);
             });
 
@@ -697,13 +693,13 @@ void GameView::onPassingComplete(Cards receivedCards) {
 
             // Phase 2: Push up to highlight (after throw completes)
             QPropertyAnimation* pushAnim = new QPropertyAnimation(item, "pos");
-            pushAnim->setDuration(150);
+            pushAnim->setDuration(80);
             pushAnim->setStartValue(handPos);
             pushAnim->setEndValue(pushedPos);
             pushAnim->setEasingCurve(QEasingCurve::OutCubic);
 
             QPropertyAnimation* wobbleAnim = new QPropertyAnimation(item, "rotation");
-            wobbleAnim->setDuration(150);
+            wobbleAnim->setDuration(80);
             wobbleAnim->setStartValue(0.0);
             wobbleAnim->setEndValue(endRotation);
             wobbleAnim->setEasingCurve(QEasingCurve::OutCubic);
@@ -752,12 +748,12 @@ void GameView::clearReceivedCardHighlight() {
 
             if (m_animatePassingCards) {
                 QPropertyAnimation* slideBack = new QPropertyAnimation(item, "pos");
-                slideBack->setDuration(200);
+                slideBack->setDuration(120);
                 slideBack->setEndValue(targetPos);
                 slideBack->setEasingCurve(QEasingCurve::OutCubic);
 
                 QPropertyAnimation* rotateBack = new QPropertyAnimation(item, "rotation");
-                rotateBack->setDuration(200);
+                rotateBack->setDuration(120);
                 rotateBack->setEndValue(0.0);
                 rotateBack->setEasingCurve(QEasingCurve::OutCubic);
 
@@ -845,14 +841,14 @@ void GameView::onCardPlayed(int player, Card card) {
                 QPointF dest = trickCardPosition(player);
 
                 QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
-                posAnim->setDuration(200);
+                posAnim->setDuration(120);
                 posAnim->setStartValue(startPos);
                 posAnim->setEndValue(dest);
 
                 if (m_animateCardRotation) {
                     qreal trickRotation = QRandomGenerator::global()->bounded(11) - 5;  // Random rotation -5 to +5 degrees
                     QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
-                    rotAnim->setDuration(200);
+                    rotAnim->setDuration(120);
                     rotAnim->setStartValue(0.0);
                     rotAnim->setEndValue(trickRotation);
 
@@ -903,20 +899,20 @@ void GameView::onCardPlayed(int player, Card card) {
 
             // Animate position from hand to trick area
             QPropertyAnimation* posAnim = new QPropertyAnimation(item, "pos");
-            posAnim->setDuration(200);
+            posAnim->setDuration(120);
             posAnim->setStartValue(startPos);
             posAnim->setEndValue(dest);
             posAnim->setEasingCurve(QEasingCurve::OutCubic);
 
             // Animate rotation
             QPropertyAnimation* rotAnim = new QPropertyAnimation(item, "rotation");
-            rotAnim->setDuration(200);
+            rotAnim->setDuration(120);
             rotAnim->setStartValue(startRotation);
             rotAnim->setEndValue(endRotation);
             rotAnim->setEasingCurve(QEasingCurve::OutCubic);
 
             // Flip the card face-up partway through the animation
-            QTimer::singleShot(100, item, [item]() {
+            QTimer::singleShot(60, item, [item]() {
                 item->setFaceUp(true);
             });
 
@@ -955,12 +951,12 @@ void GameView::onTrickWon(int winner, int points) {
 
     for (CardItem* item : cardsToAnimate) {
         QPropertyAnimation* moveAnim = new QPropertyAnimation(item, "pos");
-        moveAnim->setDuration(300);
+        moveAnim->setDuration(180);
         moveAnim->setEndValue(dest);
         group->addAnimation(moveAnim);
 
         QPropertyAnimation* opacityAnim = new QPropertyAnimation(item, "opacity");
-        opacityAnim->setDuration(300);
+        opacityAnim->setDuration(180);
         opacityAnim->setEndValue(0.0);
         group->addAnimation(opacityAnim);
     }

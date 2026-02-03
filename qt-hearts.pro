@@ -1,4 +1,4 @@
-QT += core gui widgets svgwidgets multimedia
+QT += core gui widgets svgwidgets multimedia openglwidgets
 
 CONFIG += c++17
 
@@ -17,7 +17,8 @@ SOURCES += \
     src/carditem.cpp \
     src/gameview.cpp \
     src/mainwindow.cpp \
-    src/soundengine.cpp
+    src/soundengine.cpp \
+    src/smoothanimationdriver.cpp
 
 HEADERS += \
     include/card.h \
@@ -28,6 +29,7 @@ HEADERS += \
     include/carditem.h \
     include/gameview.h \
     include/mainwindow.h \
-    include/soundengine.h
+    include/soundengine.h \
+    include/smoothanimationdriver.h
 
 RESOURCES += resources.qrc
