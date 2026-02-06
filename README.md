@@ -25,7 +25,7 @@ yay -S qt-hearts-git    # development version
 
 ### From Source
 
-**Dependencies:** Qt 6.x (Widgets, SvgWidgets, Multimedia), CMake 3.16+
+**Dependencies:** Qt 6.x (Widgets, Svg, Multimedia, Quick), CMake 3.16+
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
