@@ -19,8 +19,7 @@ A classic Hearts card game built with Qt6.
 ### Arch Linux (AUR)
 
 ```bash
-yay -S qt-hearts        # stable release
-yay -S qt-hearts-git    # development version
+yay -S qt-hearts
 ```
 
 ### From Source
