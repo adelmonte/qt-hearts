@@ -178,9 +178,13 @@ QPixmap CardTheme::renderSvgElement(const QString& elementId, const QSize& size)
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
+    // Target rectangle fills the entire pixmap in LOGICAL coordinates
+    // The painter already has the DPR transform applied via the pixmap
+    QRectF targetRect(0, 0, size.width(), size.height());
+
     // Try the element ID directly
     if (m_renderer->elementExists(elementId)) {
-        m_renderer->render(&painter, elementId);
+        m_renderer->render(&painter, elementId, targetRect);
     } else {
         // Try alternative formats
         QStringList alternatives = {
@@ -192,7 +196,7 @@ QPixmap CardTheme::renderSvgElement(const QString& elementId, const QSize& size)
         bool found = false;
         for (const QString& alt : alternatives) {
             if (m_renderer->elementExists(alt)) {
-                m_renderer->render(&painter, alt);
+                m_renderer->render(&painter, alt, targetRect);
                 found = true;
                 break;
             }
@@ -273,16 +277,16 @@ QPixmap CardTheme::generateCard(const Card& card, const QSize& size) {
     painter.setPen(color);
     painter.drawText(QRectF(margin, margin, w * 0.3, h * 0.15), Qt::AlignLeft | Qt::AlignTop, rankStr);
 
-    // Small suit symbol
+    // Small suit symbol (below rank text)
     qreal smallSize = w * 0.15;
-    drawSuitSymbol(painter, card.suit(), QRectF(margin, margin + h * 0.12, smallSize, smallSize), color);
+    drawSuitSymbol(painter, card.suit(), QRectF(margin, margin + h * 0.18, smallSize, smallSize), color);
 
     // Bottom right (rotated)
     painter.save();
     painter.translate(w - margin, h - margin);
     painter.rotate(180);
     painter.drawText(QRectF(0, 0, w * 0.3, h * 0.15), Qt::AlignLeft | Qt::AlignTop, rankStr);
-    drawSuitSymbol(painter, card.suit(), QRectF(0, h * 0.12, smallSize, smallSize), color);
+    drawSuitSymbol(painter, card.suit(), QRectF(0, h * 0.18, smallSize, smallSize), color);
     painter.restore();
 
     // Center suit symbol

@@ -1,4 +1,4 @@
-QT += core gui widgets svgwidgets multimedia openglwidgets
+QT += core gui widgets svgwidgets multimedia quick quickcontrols2 quickwidgets
 
 CONFIG += c++17
 
@@ -14,11 +14,9 @@ SOURCES += \
     src/player.cpp \
     src/game.cpp \
     src/cardtheme.cpp \
-    src/carditem.cpp \
-    src/gameview.cpp \
-    src/mainwindow.cpp \
-    src/soundengine.cpp \
-    src/smoothanimationdriver.cpp
+    src/gamebridge.cpp \
+    src/cardimageprovider.cpp \
+    src/soundengine.cpp
 
 HEADERS += \
     include/card.h \
@@ -26,10 +24,8 @@ HEADERS += \
     include/player.h \
     include/game.h \
     include/cardtheme.h \
-    include/carditem.h \
-    include/gameview.h \
-    include/mainwindow.h \
-    include/soundengine.h \
-    include/smoothanimationdriver.h
+    include/gamebridge.h \
+    include/cardimageprovider.h \
+    include/soundengine.h
 
-RESOURCES += resources.qrc
+RESOURCES += resources.qrc qml.qrc

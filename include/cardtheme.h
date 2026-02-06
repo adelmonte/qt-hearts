@@ -30,7 +30,9 @@ public:
     QPixmap cardBack(const QSize& size);
 
     QString themeName() const { return m_themeName; }
+    QString themePath() const { return m_themePath; }
     bool isLoaded() const { return m_loaded; }
+    void clearCache() { m_cache.clear(); }
 
 private:
     QPixmap renderSvgElement(const QString& elementId, const QSize& size);

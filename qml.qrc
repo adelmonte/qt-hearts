@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/GameBoard.qml</file>
+        <file>qml/CardItem.qml</file>
+        <file>qml/CardBack.qml</file>
+        <file>qml/PlayerHand.qml</file>
+        <file>qml/OpponentHand.qml</file>
+        <file>qml/TrickArea.qml</file>
+        <file>qml/Scoreboard.qml</file>
+        <file>qml/MessageBanner.qml</file>
+        <file>qml/PassArrow.qml</file>
+        <file>qml/GameOverlay.qml</file>
+    </qresource>
+</RCC>

@@ -27,6 +27,9 @@ public:
     // For SVG element IDs (e.g., "1_club", "queen_spade")
     QString elementId() const;
 
+    // Parse from element ID
+    static Card fromElementId(const QString& id);
+
     // Display strings
     QString rankString() const;
     QString suitString() const;

@@ -1,4 +1,5 @@
 #include "card.h"
+#include <QStringList>
 
 Card::Card() : m_suit(Suit::Clubs), m_rank(Rank::Two), m_valid(false) {}
 
@@ -37,6 +38,39 @@ QString Card::elementId() const {
     }
 
     return r + "_" + s;
+}
+
+Card Card::fromElementId(const QString& id) {
+    QStringList parts = id.split('_');
+    if (parts.size() != 2) return Card();
+
+    QString rankPart = parts[0].toLower();
+    QString suitPart = parts[1].toLower();
+
+    Rank rank;
+    if (rankPart == "1" || rankPart == "ace") rank = Rank::Ace;
+    else if (rankPart == "2") rank = Rank::Two;
+    else if (rankPart == "3") rank = Rank::Three;
+    else if (rankPart == "4") rank = Rank::Four;
+    else if (rankPart == "5") rank = Rank::Five;
+    else if (rankPart == "6") rank = Rank::Six;
+    else if (rankPart == "7") rank = Rank::Seven;
+    else if (rankPart == "8") rank = Rank::Eight;
+    else if (rankPart == "9") rank = Rank::Nine;
+    else if (rankPart == "10") rank = Rank::Ten;
+    else if (rankPart == "jack") rank = Rank::Jack;
+    else if (rankPart == "queen") rank = Rank::Queen;
+    else if (rankPart == "king") rank = Rank::King;
+    else return Card();
+
+    Suit suit;
+    if (suitPart == "club" || suitPart == "clubs") suit = Suit::Clubs;
+    else if (suitPart == "diamond" || suitPart == "diamonds") suit = Suit::Diamonds;
+    else if (suitPart == "spade" || suitPart == "spades") suit = Suit::Spades;
+    else if (suitPart == "heart" || suitPart == "hearts") suit = Suit::Hearts;
+    else return Card();
+
+    return Card(suit, rank);
 }
 
 QString Card::rankString() const {
