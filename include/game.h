@@ -115,6 +115,7 @@ signals:
     void scoresChanged();
     void currentPlayerChanged(int player);
     void heartsBrokenSignal();
+    void shootTheMoonOccurred(int shooter);
     void undoAvailableChanged(bool available);
     void undoPerformed();  // Signal to refresh the view
 

@@ -6,29 +6,11 @@ Item {
     property real cardWidth: 80
     property real cardHeight: 116
 
-    property var cardItems: []
-    property var cardPlayers: []
     property int expectedCardCount: 0
     property var exitingCards: []
 
     width: cardWidth * 3
     height: cardHeight * 3
-
-    onCardWidthChanged: relayoutTrickCards()
-    onCardHeightChanged: relayoutTrickCards()
-
-    function relayoutTrickCards() {
-        for (var i = 0; i < cardItems.length; i++) {
-            var card = cardItems[i]
-            var player = cardPlayers[i]
-            if (card && player !== undefined) {
-                card.cardWidth = trickArea.cardWidth
-                card.cardHeight = trickArea.cardHeight
-                card.x = cardX(player)
-                card.y = cardY(player)
-            }
-        }
-    }
 
     // Card positions per player
     function cardX(player) {
@@ -93,14 +75,92 @@ Item {
         return (height - cardHeight) / 2
     }
 
-    function clearTrickCards() {
-        for (var i = 0; i < cardItems.length; i++) {
-            if (cardItems[i]) {
-                cardItems[i].destroy()
+    // --- Trick cards: ListModel + Repeater for reactive positioning ---
+
+    ListModel {
+        id: trickModel
+    }
+
+    Repeater {
+        id: trickRepeater
+        model: trickModel
+
+        delegate: Item {
+            id: del
+
+            // Fly-in offset: starts at (startPos - targetPos), animates to 0.
+            // The x/y bindings below always point at the final target, so after
+            // the offset reaches 0, the card tracks resize changes natively.
+            property real flyInOffsetX: model.noAnim ? 0
+                : (trickArea.startX(model.player) - trickArea.cardX(model.player))
+            property real flyInOffsetY: model.noAnim ? 0
+                : (trickArea.startY(model.player) - trickArea.cardY(model.player))
+            property bool flipDone: model.noAnim
+
+            // Position — inlined to guarantee dependency tracking on
+            // trickArea.width, trickArea.cardWidth, trickArea.cardHeight
+            x: trickArea.cardX(model.player)
+            y: trickArea.cardY(model.player)
+            width: trickArea.cardWidth + 4
+            height: trickArea.cardHeight + 4
+            z: model.index
+            rotation: model.rot
+
+            // Visual offset for fly-in (does not break x/y bindings)
+            transform: Translate {
+                x: del.flyInOffsetX
+                y: del.flyInOffsetY
+            }
+
+            Behavior on flyInOffsetX {
+                NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+            }
+            Behavior on flyInOffsetY {
+                NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+            }
+
+            CardItem {
+                suit: model.suit
+                rank: model.rank
+                elementId: model.elId
+                faceUp: model.player === 0 || del.flipDone
+                playable: false
+                inTrick: true
+                cardWidth: trickArea.cardWidth
+                cardHeight: trickArea.cardHeight
+                enableBehaviors: false
+            }
+
+            Component.onCompleted: {
+                if (!model.noAnim) {
+                    // Kick off fly-in: animate offset from (start-target) to 0
+                    flyInOffsetX = 0
+                    flyInOffsetY = 0
+                }
+            }
+
+            // Flip AI cards face-up partway through fly-in
+            Timer {
+                running: model.player !== 0 && !del.flipDone
+                interval: 60
+                onTriggered: del.flipDone = true
             }
         }
-        cardItems = []
-        cardPlayers = []
+    }
+
+    function addCard(player, suit, rank, elementId) {
+        trickModel.append({
+            "player": player,
+            "suit": suit,
+            "rank": rank,
+            "elId": elementId,
+            "rot": gameBridge.animateCardRotation ? (Math.floor(Math.random() * 11) - 5) : 0,
+            "noAnim": false
+        })
+    }
+
+    function clearTrickCards() {
+        trickModel.clear()
         expectedCardCount = 0
     }
 
@@ -111,86 +171,6 @@ Item {
             }
         }
         exitingCards = []
-    }
-
-    function addCard(player, suit, rank, elementId) {
-        var component = Qt.createComponent("CardItem.qml")
-        if (component.status === Component.Ready) {
-            var card = component.createObject(trickArea, {
-                "suit": suit,
-                "rank": rank,
-                "elementId": elementId,
-                "faceUp": player === 0,  // AI cards start face-down
-                "playable": false,
-                "inTrick": true,
-                "cardWidth": trickArea.cardWidth,
-                "cardHeight": trickArea.cardHeight,
-                "enableBehaviors": false,
-                "x": startX(player),
-                "y": startY(player),
-                "z": cardItems.length,
-                "rotation": gameBridge.animateCardRotation ? (Math.floor(Math.random() * 11) - 5) : 0
-            })
-
-            cardItems.push(card)
-            cardPlayers.push(player)
-
-            var targetX = cardX(player)
-            var targetY = cardY(player)
-
-            entryAnim.createObject(card, {
-                "targetX": targetX,
-                "targetY": targetY,
-                "isAI": player !== 0
-            })
-        }
-    }
-
-    Component {
-        id: entryAnim
-        Item {
-            id: animController
-            property real targetX
-            property real targetY
-            property bool isAI: false
-
-            ParallelAnimation {
-                id: moveAnim
-                running: true
-                NumberAnimation {
-                    target: animController.parent
-                    property: "x"
-                    to: animController.targetX
-                    duration: 180
-                    easing.type: Easing.OutQuad
-                }
-                NumberAnimation {
-                    target: animController.parent
-                    property: "y"
-                    to: animController.targetY
-                    duration: 180
-                    easing.type: Easing.OutQuad
-                }
-            }
-
-            // Flip AI cards face-up partway through
-            Timer {
-                running: animController.isAI
-                interval: 60
-                onTriggered: {
-                    if (animController.parent) {
-                        animController.parent.faceUp = true
-                    }
-                }
-            }
-
-            // Clean up after animation
-            Timer {
-                running: true
-                interval: 200
-                onTriggered: animController.destroy()
-            }
-        }
     }
 
     Connections {
@@ -208,19 +188,52 @@ Item {
     Connections {
         target: gameBridge
         function onTrickWonByPlayer(winner, points) {
-            var cardsToExit = cardItems
-            trickArea.exitingCards = trickArea.exitingCards.concat(cardsToExit)
-            trickArea.cardItems = []
-            trickArea.cardPlayers = []
+            // Snapshot current cards as standalone items for exit animation
+            var newExiting = []
+            for (var i = 0; i < trickModel.count; i++) {
+                var m = trickModel.get(i)
+                var item = trickRepeater.itemAt(i)
+                var posX = cardX(m.player)
+                var posY = cardY(m.player)
+                if (item) {
+                    var pos = item.mapToItem(trickArea, 0, 0)
+                    posX = pos.x
+                    posY = pos.y
+                }
+
+                var component = Qt.createComponent("CardItem.qml")
+                if (component.status === Component.Ready) {
+                    var card = component.createObject(trickArea, {
+                        "suit": m.suit,
+                        "rank": m.rank,
+                        "elementId": m.elId,
+                        "faceUp": true,
+                        "playable": false,
+                        "inTrick": true,
+                        "cardWidth": trickArea.cardWidth,
+                        "cardHeight": trickArea.cardHeight,
+                        "enableBehaviors": false,
+                        "x": posX,
+                        "y": posY,
+                        "z": 10 + i,
+                        "rotation": m.rot
+                    })
+                    newExiting.push(card)
+                }
+            }
+
+            // Clear model — Repeater delegates vanish instantly
+            trickModel.clear()
             trickArea.expectedCardCount = 0
 
+            // Animate exit cards toward winner
+            trickArea.exitingCards = trickArea.exitingCards.concat(newExiting)
             var ex = trickArea.exitX(winner)
             var ey = trickArea.exitY(winner)
 
-            for (var i = 0; i < cardsToExit.length; i++) {
-                var item = cardsToExit[i]
-                if (item) {
-                    exitAnim.createObject(item, {
+            for (var j = 0; j < newExiting.length; j++) {
+                if (newExiting[j]) {
+                    exitAnim.createObject(newExiting[j], {
                         "exitX": ex,
                         "exitY": ey
                     })
@@ -281,12 +294,12 @@ Item {
         function onTrickCardsChanged() {
             var modelCards = gameBridge.trickCards
 
-            if (modelCards.length === 0 && cardItems.length > 0) {
+            if (modelCards.length === 0 && trickModel.count > 0) {
                 clearTrickCards()
                 return
             }
 
-            if (modelCards.length > 0 && modelCards.length < cardItems.length) {
+            if (modelCards.length > 0 && modelCards.length < trickModel.count) {
                 clearTrickCards()
             }
 
@@ -295,30 +308,18 @@ Item {
             }
 
             // Rebuild from model (game reload / undo)
-            if (cardItems.length === 0 && expectedCardCount === 0 && modelCards.length > 0) {
+            if (trickModel.count === 0 && expectedCardCount === 0 && modelCards.length > 0) {
                 expectedCardCount = modelCards.length
                 for (var i = 0; i < modelCards.length; i++) {
                     var c = modelCards[i]
-                    var component = Qt.createComponent("CardItem.qml")
-                    if (component.status === Component.Ready) {
-                        var card = component.createObject(trickArea, {
-                            "suit": c.suit,
-                            "rank": c.rank,
-                            "elementId": c.elementId,
-                            "faceUp": true,
-                            "playable": false,
-                            "inTrick": true,
-                            "cardWidth": trickArea.cardWidth,
-                            "cardHeight": trickArea.cardHeight,
-                            "enableBehaviors": false,
-                            "x": cardX(c.player),
-                            "y": cardY(c.player),
-                            "z": i,
-                            "rotation": gameBridge.animateCardRotation ? (Math.floor(Math.random() * 11) - 5) : 0
-                        })
-                        cardItems.push(card)
-                        cardPlayers.push(c.player)
-                    }
+                    trickModel.append({
+                        "player": c.player,
+                        "suit": c.suit,
+                        "rank": c.rank,
+                        "elId": c.elementId,
+                        "rot": gameBridge.animateCardRotation ? (Math.floor(Math.random() * 11) - 5) : 0,
+                        "noAnim": true
+                    })
                 }
             }
         }

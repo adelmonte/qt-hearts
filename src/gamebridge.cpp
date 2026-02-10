@@ -22,6 +22,12 @@ GameBridge::GameBridge(QObject* parent)
     connect(m_game, &Game::scoresChanged, this, &GameBridge::onScoresChanged);
     connect(m_game, &Game::currentPlayerChanged, this, &GameBridge::onCurrentPlayerChanged);
     connect(m_game, &Game::heartsBrokenSignal, this, &GameBridge::onHeartsBroken);
+    connect(m_game, &Game::shootTheMoonOccurred, this, [this](int shooter) {
+        QString name = m_game->player(shooter)->name();
+        showMessage(name + " shot the moon!", 2500);
+        m_shootTheMoonCount++;
+        emit statisticsChanged();
+    });
     connect(m_game, &Game::undoAvailableChanged, this, [this](bool available) {
         m_undoAvailable = available;
         emit undoAvailableChanged();

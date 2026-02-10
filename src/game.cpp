@@ -468,6 +468,8 @@ void Game::endRound() {
     // Check for shoot the moon
     for (int i = 0; i < NUM_PLAYERS; ++i) {
         if (m_players[i]->roundScore() == 26) {
+            emit shootTheMoonOccurred(i);
+
             // Determine whether to take -26 or give +26 to others
             bool takeNegative = false;
 
