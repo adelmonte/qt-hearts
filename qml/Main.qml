@@ -127,7 +127,7 @@ Item {
         title: qsTr("Settings")
         standardButtons: Dialog.Ok | Dialog.Cancel
         anchors.centerIn: parent
-        width: 520
+        width: 820
         modal: true
 
         background: Rectangle {
@@ -154,6 +154,19 @@ Item {
 
         // Guard to prevent theme preview resets during control sync
         property bool syncing: false
+
+        // Reusable component for checkboxes whose label may need to wrap
+        component WrappingCheckBox: CheckBox {
+            id: wcb
+            Layout.fillWidth: true
+            contentItem: Label {
+                text: wcb.text
+                wrapMode: Text.WordWrap
+                color: wcb.palette.windowText
+                leftPadding: wcb.indicator.width + wcb.spacing
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
 
         onAboutToShow: {
             syncing = true
@@ -239,175 +252,249 @@ Item {
             if (gameBridge.showMenuBar !== origShowMenuBar) gameBridge.showMenuBar = origShowMenuBar
         }
 
-        ColumnLayout {
-            id: settingsColumn
-            spacing: 12
+        GridLayout {
+            id: settingsGrid
             anchors.fill: parent
+            columns: 2
+            columnSpacing: 24
+            rowSpacing: 14
 
-            // Card Theme
-            Label { text: qsTr("Card Theme:"); font.bold: true }
-            ComboBox {
-                id: themeCombo
+            // ===== LEFT COLUMN: Appearance =====
+            ColumnLayout {
+                Layout.column: 0
+                Layout.row: 0
                 Layout.fillWidth: true
-                textRole: "name"
-                model: {
-                    var themes = gameBridge.availableThemes
-                    var result = [{name: qsTr("Built-in"), path: ""}]
-                    for (var i = 0; i < themes.length; i++) {
-                        result.push(themes[i])
-                    }
-                    return result
-                }
-                onCurrentIndexChanged: {
-                    if (!settingsDialog.syncing && currentIndex >= 0 && model && model.length > currentIndex) {
-                        gameBridge.loadPreviewTheme(model[currentIndex].path)
-                    }
-                }
-            }
+                Layout.alignment: Qt.AlignTop
+                spacing: 10
 
-            // Theme preview
-            Row {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 12
-
-                Image {
-                    source: "image://cardpreview/2_12?v=" + gameBridge.previewVersion
-                    sourceSize.width: 70
-                    sourceSize.height: 101
-                    smooth: true
-                }
-                Image {
-                    source: "image://cardpreview/3_14?v=" + gameBridge.previewVersion
-                    sourceSize.width: 70
-                    sourceSize.height: 101
-                    smooth: true
-                }
-                Image {
-                    source: "image://cardpreview/back?v=" + gameBridge.previewVersion
-                    sourceSize.width: 70
-                    sourceSize.height: 101
-                    smooth: true
-                }
-            }
-
-            // Card size slider
-            Label { text: qsTr("Card Size:"); font.bold: true }
-            RowLayout {
-                Layout.fillWidth: true
-                Slider {
-                    id: cardScaleSlider
-                    Layout.fillWidth: true
-                    from: 0.5
-                    to: 2.0
-                    stepSize: 0.05
-                    value: gameBridge.cardScale
-                    onMoved: gameBridge.cardScale = value
-                }
                 Label {
-                    text: Math.round(cardScaleSlider.value * 100) + "%"
-                    Layout.minimumWidth: 45
+                    text: qsTr("Appearance")
+                    font.bold: true
+                    font.pixelSize: 14
+                    color: "#cccccc"
                 }
-            }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#4a4a4a" }
 
-            // Sound
-            CheckBox {
-                id: soundCheck
-                text: qsTr("Enable sound effects")
-                checked: gameBridge.soundEnabled
-            }
-
-            // Animations header
-            Label { text: qsTr("Animations"); font.bold: true; Layout.topMargin: 6 }
-
-            CheckBox {
-                id: cardRotationCheck
-                text: qsTr("Card rotation on trick pile (slight random tilt)")
-                checked: gameBridge.animateCardRotation
-            }
-            CheckBox {
-                id: aiCardsCheck
-                text: qsTr("Animate AI card plays")
-                checked: gameBridge.animateAICards
-            }
-            CheckBox {
-                id: passingCardsCheck
-                text: qsTr("Animate card passing")
-                checked: gameBridge.animatePassingCards
-            }
-
-            // AI Difficulty
-            Label { text: qsTr("AI Difficulty:"); font.bold: true; Layout.topMargin: 6 }
-            ComboBox {
-                id: difficultyCombo
-                Layout.fillWidth: true
-                model: [qsTr("Easy"), qsTr("Medium"), qsTr("Hard")]
-                currentIndex: gameBridge.aiDifficulty
-            }
-
-            // Game Rules header
-            Label { text: qsTr("Game Rules"); font.bold: true; Layout.topMargin: 6 }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: qsTr("Game ends at score:") }
-                ComboBox {
-                    id: endScoreCombo
+                RowLayout {
                     Layout.fillWidth: true
-                    textRole: "text"
-                    model: ListModel {
-                        id: endScoreModel
-                        ListElement { text: "50"; value: 50 }
-                        ListElement { text: "75"; value: 75 }
-                        ListElement { text: "100 (Standard)"; value: 100 }
-                        ListElement { text: "150"; value: 150 }
-                    }
-                    Component.onCompleted: {
-                        var es = gameBridge.endScore
-                        for (var i = 0; i < endScoreModel.count; i++) {
-                            if (endScoreModel.get(i).value === es) {
-                                currentIndex = i
-                                break
+                    spacing: 10
+                    Label { text: qsTr("Theme:"); Layout.preferredWidth: 80 }
+                    ComboBox {
+                        id: themeCombo
+                        Layout.fillWidth: true
+                        textRole: "name"
+                        model: {
+                            var themes = gameBridge.availableThemes
+                            var result = [{name: qsTr("Built-in"), path: ""}]
+                            for (var i = 0; i < themes.length; i++) {
+                                result.push(themes[i])
+                            }
+                            return result
+                        }
+                        onCurrentIndexChanged: {
+                            if (!settingsDialog.syncing && currentIndex >= 0 && model && model.length > currentIndex) {
+                                gameBridge.loadPreviewTheme(model[currentIndex].path)
                             }
                         }
                     }
                 }
+
+                // Theme preview — fan of cards + back
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 200
+                    Layout.topMargin: 4
+                    color: "#1f4d2a"
+                    radius: 6
+                    border.color: "#444444"
+                    border.width: 1
+
+                    Item {
+                        anchors.centerIn: parent
+                        width: parent.width - 24
+                        height: parent.height - 16
+
+                        Row {
+                            id: previewRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            spacing: -32
+
+                            Repeater {
+                                model: [
+                                    { id: "0_13", rot: -10 },  // K♣
+                                    { id: "1_7",  rot: -5 },   // 7♦
+                                    { id: "2_12", rot:  0 },   // Q♠
+                                    { id: "3_11", rot:  5 },   // J♥
+                                    { id: "3_14", rot:  10 }   // A♥
+                                ]
+                                delegate: Image {
+                                    source: "image://cardpreview/" + modelData.id + "?v=" + gameBridge.previewVersion
+                                    sourceSize.width: 100
+                                    sourceSize.height: 145
+                                    width: sourceSize.width
+                                    height: sourceSize.height
+                                    smooth: true
+                                    rotation: modelData.rot
+                                    transformOrigin: Item.Bottom
+                                }
+                            }
+                        }
+
+                        Image {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            source: "image://cardpreview/back?v=" + gameBridge.previewVersion
+                            sourceSize.width: 100
+                            sourceSize.height: 145
+                            width: sourceSize.width
+                            height: sourceSize.height
+                            smooth: true
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    spacing: 10
+                    Label { text: qsTr("Card Size:"); Layout.preferredWidth: 80 }
+                    Slider {
+                        id: cardScaleSlider
+                        Layout.fillWidth: true
+                        from: 0.5
+                        to: 2.0
+                        stepSize: 0.05
+                        value: gameBridge.cardScale
+                        onMoved: gameBridge.cardScale = value
+                    }
+                    Label {
+                        text: Math.round(cardScaleSlider.value * 100) + "%"
+                        Layout.preferredWidth: 45
+                        horizontalAlignment: Text.AlignRight
+                    }
+                }
+
+                CheckBox {
+                    id: menuBarCheck
+                    text: qsTr("Show menu bar (Ctrl+M to toggle)")
+                    checked: gameBridge.showMenuBar
+                }
+
+                // Theme info
+                Label {
+                    text: qsTr("Themes load from ~/.local/share/carddecks/ and /usr/share/carddecks/. Install KDE card decks for more options.")
+                    font.pixelSize: 11
+                    color: "#888888"
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Layout.topMargin: 6
+                }
             }
 
-            CheckBox {
-                id: exactResetCheck
-                text: qsTr("Exactly %1 = reset to 50 (\"Save and take half\")").arg(
-                    endScoreModel.count > 0 ? endScoreModel.get(endScoreCombo.currentIndex).value : 100)
-            }
-            CheckBox {
-                id: queenBreaksCheck
-                text: qsTr("Queen of Spades breaks hearts")
-            }
-            CheckBox {
-                id: moonChoiceCheck
-                text: qsTr("Shoot the Moon protection: if +26 to others would cause shooter to lose, take -26 instead")
+            // ===== RIGHT COLUMN: Gameplay + Sound =====
+            ColumnLayout {
+                Layout.column: 1
+                Layout.row: 0
                 Layout.fillWidth: true
-            }
-            CheckBox {
-                id: fullPolishCheck
-                text: qsTr("Full Polish: 99 points + takes 25 = reset to 98")
-            }
+                Layout.alignment: Qt.AlignTop
+                spacing: 10
 
-            // UI
-            Label { text: qsTr("Interface"); font.bold: true; Layout.topMargin: 6 }
-            CheckBox {
-                id: menuBarCheck
-                text: qsTr("Show menu bar (Ctrl+M to toggle)")
-                checked: gameBridge.showMenuBar
-            }
+                Label {
+                    text: qsTr("Gameplay")
+                    font.bold: true
+                    font.pixelSize: 14
+                    color: "#cccccc"
+                }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#4a4a4a" }
 
-            // Theme info
-            Label {
-                text: qsTr("Card themes are loaded from:\n~/.local/share/carddecks/\n/usr/share/carddecks/\nInstall KDE card decks for more themes.")
-                font.pixelSize: 11
-                color: "#888888"
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                Layout.topMargin: 10
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Label { text: qsTr("AI Difficulty:"); Layout.preferredWidth: 110 }
+                    ComboBox {
+                        id: difficultyCombo
+                        Layout.fillWidth: true
+                        model: [qsTr("Easy"), qsTr("Medium"), qsTr("Hard")]
+                        currentIndex: gameBridge.aiDifficulty
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Label { text: qsTr("Game ends at:"); Layout.preferredWidth: 110 }
+                    ComboBox {
+                        id: endScoreCombo
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        model: ListModel {
+                            id: endScoreModel
+                            ListElement { text: "50"; value: 50 }
+                            ListElement { text: "75"; value: 75 }
+                            ListElement { text: "100 (Standard)"; value: 100 }
+                            ListElement { text: "150"; value: 150 }
+                        }
+                        Component.onCompleted: {
+                            var es = gameBridge.endScore
+                            for (var i = 0; i < endScoreModel.count; i++) {
+                                if (endScoreModel.get(i).value === es) {
+                                    currentIndex = i
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+
+                CheckBox {
+                    id: queenBreaksCheck
+                    text: qsTr("Queen of Spades breaks hearts")
+                }
+                WrappingCheckBox {
+                    id: exactResetCheck
+                    text: qsTr("Exactly %1 = reset to 50 (\"Save and take half\")").arg(
+                        endScoreModel.count > 0 ? endScoreModel.get(endScoreCombo.currentIndex).value : 100)
+                }
+                WrappingCheckBox {
+                    id: moonChoiceCheck
+                    text: qsTr("Shoot the Moon protection: if +26 to others would cause shooter to lose, take -26 instead")
+                }
+                WrappingCheckBox {
+                    id: fullPolishCheck
+                    text: qsTr("Full Polish: 99 points + takes 25 = reset to 98")
+                }
+
+                Label {
+                    text: qsTr("Sound & Animations")
+                    font.bold: true
+                    font.pixelSize: 14
+                    color: "#cccccc"
+                    Layout.topMargin: 8
+                }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#4a4a4a" }
+
+                CheckBox {
+                    id: soundCheck
+                    text: qsTr("Enable sound effects")
+                    checked: gameBridge.soundEnabled
+                }
+                WrappingCheckBox {
+                    id: cardRotationCheck
+                    text: qsTr("Card rotation on trick pile (slight random tilt)")
+                }
+                CheckBox {
+                    id: aiCardsCheck
+                    text: qsTr("Animate AI card plays")
+                    checked: gameBridge.animateAICards
+                }
+                CheckBox {
+                    id: passingCardsCheck
+                    text: qsTr("Animate card passing")
+                    checked: gameBridge.animatePassingCards
+                }
             }
         }
     }
