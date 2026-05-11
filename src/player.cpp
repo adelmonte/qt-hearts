@@ -540,6 +540,40 @@ Card Player::aiSelectFollowHard(const Cards& valid, Suit leadSuit, const Cards& 
     // Cards we can play in the lead suit
     Cards validInSuit = cardsOfSuit(valid, leadSuit);
 
+    // Moon defense: if a shooter (13+ round pts) is currently winning, try to take the trick
+    const GameContext& ctx = m_gameContext;
+    for (int i = 0; i < 4; ++i) {
+        if (i != m_id && ctx.roundScores[i] >= 13) {
+            // Determine if that player is currently winning
+            bool shooterWinning = false;
+            Suit trickLeadSuit = trickCards[0].suit();
+            Card highestInLead;
+            int currentWinner = -1;
+            for (int j = 0; j < trickCards.size(); ++j) {
+                if (trickCards[j].suit() == trickLeadSuit) {
+                    if (!highestInLead.isValid() || trickCards[j].rank() > highestInLead.rank()) {
+                        highestInLead = trickCards[j];
+                        currentWinner = trickPlayers[j];
+                    }
+                }
+            }
+            shooterWinning = (currentWinner == i);
+
+            if (shooterWinning && highestPlayed.isValid()) {
+                // Try to beat them with the lowest winning card
+                Card lowestWin;
+                for (const Card& c : validInSuit) {
+                    if (c.rank() > highestPlayed.rank()) {
+                        if (!lowestWin.isValid() || c.rank() < lowestWin.rank())
+                            lowestWin = c;
+                    }
+                }
+                if (lowestWin.isValid()) return lowestWin;
+            }
+            break;
+        }
+    }
+
     // If we're LAST to play (position 4)
     if (numCardsPlayed == 3) {
         if (trickPoints == 0) {
@@ -610,6 +644,15 @@ Card Player::aiSelectSloughHard(const Cards& valid, const Cards& trickCards,
     }
     bool amBehind = myScore > highestOtherScore;
 
+    // Detect a moon-shooter: any opponent with >= 13 round points
+    int moonShooter = -1;
+    for (int i = 0; i < 4; ++i) {
+        if (i != m_id && ctx.roundScores[i] >= 13) {
+            moonShooter = i;
+            break;
+        }
+    }
+
     // Check who's winning this trick
     int currentWinnerId = -1;
     if (!trickPlayers.isEmpty()) {
@@ -624,6 +667,15 @@ Card Player::aiSelectSloughHard(const Cards& valid, const Cards& trickCards,
                 }
             }
         }
+    }
+
+    // Moon defense: if the shooter is winning this trick, deny them more points
+    if (moonShooter != -1 && currentWinnerId == moonShooter) {
+        // Don't gift hearts or Q♠ - dump the safest low card instead
+        for (const Card& c : valid) {
+            if (c.suit() != Suit::Hearts && !c.isQueenOfSpades()) return c;
+        }
+        // No safe card; fall through to standard logic (unavoidable)
     }
 
     // If trick already has points, dump high point cards
