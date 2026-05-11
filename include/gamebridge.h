@@ -188,7 +188,7 @@ signals:
     void showMenuBarChanged();
 
     // Animation triggers
-    void cardPlayedToTrick(int player, int suit, int rank, qreal fromX, qreal fromY);
+    void cardPlayedToTrick(int player, int suit, int rank);
     void trickWonByPlayer(int player, int points);
     void cardsReceived(QVariantList cards);
     void heartsBrokenSignal();

@@ -524,7 +524,7 @@ void GameBridge::onPassingComplete(Cards receivedCards) {
 
 void GameBridge::onCardPlayed(int player, Card card) {
     // Signal before model change so TrickArea's expectedCardCount prevents duplicates
-    emit cardPlayedToTrick(player, static_cast<int>(card.suit()), static_cast<int>(card.rank()), 0, 0);
+    emit cardPlayedToTrick(player, static_cast<int>(card.suit()), static_cast<int>(card.rank()));
 
     emit trickCardsChanged();
     emit opponentCardCountsChanged();

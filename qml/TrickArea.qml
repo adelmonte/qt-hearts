@@ -175,7 +175,7 @@ Item {
 
     Connections {
         target: gameBridge
-        function onCardPlayedToTrick(player, suit, rank, fromX, fromY) {
+        function onCardPlayedToTrick(player, suit, rank) {
             trickArea.expectedCardCount++
             var tricks = gameBridge.trickCards
             if (tricks.length > 0) {
