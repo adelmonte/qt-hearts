@@ -31,6 +31,25 @@ AIDifficulty Game::aiDifficulty() const {
     return m_players[1]->difficulty();
 }
 
+void Game::setGameSpeed(int speed) {
+    m_gameSpeed = qBound(0, speed, 2);
+}
+
+int Game::aiDelay() const {
+    static const int d[] = {150, 500, 900};
+    return d[m_gameSpeed];
+}
+
+int Game::trickDelay() const {
+    static const int d[] = {700, 1500, 2500};
+    return d[m_gameSpeed];
+}
+
+int Game::roundDelay() const {
+    static const int d[] = {700, 2000, 3000};
+    return d[m_gameSpeed];
+}
+
 Player* Game::player(int index) {
     if (index >= 0 && index < NUM_PLAYERS) {
         return m_players[index].get();
@@ -100,7 +119,7 @@ void Game::dealCards() {
 
     // Start passing (capture generation to detect if game was reset)
     int gen = m_gameGeneration;
-    QTimer::singleShot(500, this, [this, gen]() {
+    QTimer::singleShot(aiDelay(), this, [this, gen]() {
         if (gen == m_gameGeneration) startPassing();
     });
 }
@@ -113,7 +132,7 @@ void Game::startPassing() {
     if (m_passDirection == PassDirection::None) {
         emit passDirectionAnnounced(m_passDirection);
         int gen = m_gameGeneration;
-        QTimer::singleShot(500, this, [this, gen]() {
+        QTimer::singleShot(aiDelay(), this, [this, gen]() {
             if (gen == m_gameGeneration) startPlaying();
         });
         return;
@@ -193,7 +212,7 @@ void Game::executePassing() {
 
     // Start playing (with longer delay to allow user to see received cards)
     int gen = m_gameGeneration;
-    QTimer::singleShot(1500, this, [this, gen]() {
+    QTimer::singleShot(trickDelay(), this, [this, gen]() {
         if (gen == m_gameGeneration) startPlaying();
     });
 }
@@ -351,7 +370,7 @@ void Game::nextTurn() {
     if (m_currentTrick.size() == NUM_PLAYERS) {
         // Longer delay so player can see the completed trick
         int gen = m_gameGeneration;
-        QTimer::singleShot(1500, this, [this, gen]() {
+        QTimer::singleShot(trickDelay(), this, [this, gen]() {
             if (gen == m_gameGeneration) completeTrick();
         });
         return;
@@ -365,7 +384,7 @@ void Game::nextTurn() {
         setState(GameState::WaitingForPlay);
     } else {
         int gen = m_gameGeneration;
-        QTimer::singleShot(500, this, [this, gen]() {
+        QTimer::singleShot(aiDelay(), this, [this, gen]() {
             if (gen == m_gameGeneration) aiTurn();
         });
     }
@@ -398,7 +417,7 @@ void Game::completeTrick() {
     // Check if round is over
     if (m_players[0]->hand().isEmpty()) {
         int gen = m_gameGeneration;
-        QTimer::singleShot(500, this, [this, gen]() {
+        QTimer::singleShot(aiDelay(), this, [this, gen]() {
             if (gen == m_gameGeneration) endRound();
         });
         return;
@@ -414,7 +433,7 @@ void Game::completeTrick() {
         setState(GameState::WaitingForPlay);
     } else {
         int gen = m_gameGeneration;
-        QTimer::singleShot(500, this, [this, gen]() {
+        QTimer::singleShot(aiDelay(), this, [this, gen]() {
             if (gen == m_gameGeneration) aiTurn();
         });
     }
@@ -547,7 +566,7 @@ void Game::endRound() {
 
     // Start next round
     int gen = m_gameGeneration;
-    QTimer::singleShot(2000, this, [this, gen]() {
+    QTimer::singleShot(roundDelay(), this, [this, gen]() {
         if (gen == m_gameGeneration) dealCards();
     });
 }

@@ -33,6 +33,7 @@ class GameBridge : public QObject {
     Q_PROPERTY(qreal cardScale READ cardScale WRITE setCardScale NOTIFY cardScaleChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
     Q_PROPERTY(int aiDifficulty READ aiDifficulty WRITE setAIDifficulty NOTIFY aiDifficultyChanged)
+    Q_PROPERTY(int gameSpeed READ gameSpeed WRITE setGameSpeed NOTIFY gameSpeedChanged)
     Q_PROPERTY(QVariantList availableThemes READ availableThemes CONSTANT)
 
     // Animation settings
@@ -91,6 +92,8 @@ public:
     void setSoundEnabled(bool enabled);
     int aiDifficulty() const;
     void setAIDifficulty(int difficulty);
+    int gameSpeed() const;
+    void setGameSpeed(int speed);
     QVariantList availableThemes() const;
 
     // Animation settings
@@ -165,6 +168,7 @@ signals:
     void cardScaleChanged();
     void soundEnabledChanged();
     void aiDifficultyChanged();
+    void gameSpeedChanged();
 
     // Animation settings
     void animateCardRotationChanged();

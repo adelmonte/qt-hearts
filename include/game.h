@@ -71,6 +71,13 @@ public:
     void newGame();
     void setAIDifficulty(AIDifficulty difficulty);
     AIDifficulty aiDifficulty() const;
+    void setGameSpeed(int speed);  // 0=Fast, 1=Normal, 2=Slow
+    int gameSpeed() const { return m_gameSpeed; }
+
+    // Delay values (depend on gameSpeed)
+    int aiDelay() const;
+    int trickDelay() const;
+    int roundDelay() const;
 
     // Game rules
     void setRules(const GameRules& rules) { m_rules = rules; }
@@ -160,6 +167,8 @@ private:
 
     // Generation counter to invalidate stale timer callbacks
     int m_gameGeneration = 0;
+
+    int m_gameSpeed = 1;  // 0=Fast, 1=Normal, 2=Slow
 };
 
 #endif // GAME_H

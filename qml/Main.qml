@@ -151,6 +151,7 @@ Item {
         property bool origMoonProtect
         property bool origFullPolish
         property bool origShowMenuBar
+        property int origGameSpeed
 
         // Guard to prevent theme preview resets during control sync
         property bool syncing: false
@@ -184,11 +185,13 @@ Item {
             origMoonProtect = gameBridge.moonProtection
             origFullPolish = gameBridge.fullPolish
             origShowMenuBar = gameBridge.showMenuBar
+            origGameSpeed = gameBridge.gameSpeed
 
             // Sync controls
             menuBarCheck.checked = gameBridge.showMenuBar
             cardScaleSlider.value = gameBridge.cardScale
             difficultyCombo.currentIndex = gameBridge.aiDifficulty
+            speedCombo.currentIndex = gameBridge.gameSpeed
             soundCheck.checked = gameBridge.soundEnabled
             cardRotationCheck.checked = gameBridge.animateCardRotation
             aiCardsCheck.checked = gameBridge.animateAICards
@@ -231,6 +234,7 @@ Item {
         onAccepted: {
             gameBridge.cardScale = cardScaleSlider.value
             gameBridge.aiDifficulty = difficultyCombo.currentIndex
+            gameBridge.gameSpeed = speedCombo.currentIndex
             gameBridge.soundEnabled = soundCheck.checked
             gameBridge.animateCardRotation = cardRotationCheck.checked
             gameBridge.animateAICards = aiCardsCheck.checked
@@ -419,6 +423,18 @@ Item {
                         Layout.fillWidth: true
                         model: [qsTr("Easy"), qsTr("Medium"), qsTr("Hard")]
                         currentIndex: gameBridge.aiDifficulty
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Label { text: qsTr("Game Speed:"); Layout.preferredWidth: 110 }
+                    ComboBox {
+                        id: speedCombo
+                        Layout.fillWidth: true
+                        model: [qsTr("Fast"), qsTr("Normal"), qsTr("Slow")]
+                        currentIndex: gameBridge.gameSpeed
                     }
                 }
 

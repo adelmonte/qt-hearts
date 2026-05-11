@@ -195,6 +195,16 @@ void GameBridge::setAIDifficulty(int difficulty) {
     saveSettings();
 }
 
+int GameBridge::gameSpeed() const {
+    return m_game->gameSpeed();
+}
+
+void GameBridge::setGameSpeed(int speed) {
+    m_game->setGameSpeed(speed);
+    emit gameSpeedChanged();
+    saveSettings();
+}
+
 QVariantList GameBridge::availableThemes() const {
     QVariantList result;
     QVector<ThemeInfo> themes = CardTheme::findThemes();
@@ -511,9 +521,10 @@ void GameBridge::onPassingComplete(Cards receivedCards) {
     }
     emit cardsReceived(cardsList);
 
-    showMessage("Cards received!", 1500);
+    int displayDuration = m_game->trickDelay();
+    showMessage("Cards received!", displayDuration);
 
-    QTimer::singleShot(1500, this, [this]() {
+    QTimer::singleShot(displayDuration, this, [this]() {
         m_receivedCards.clear();
         m_showingReceivedCards = false;
         m_inputBlocked = false;
@@ -537,7 +548,10 @@ void GameBridge::onTrickWon(int winner, int points) {
 
     emit trickWonByPlayer(winner, points);
 
-    QTimer::singleShot(800, this, [this]() {
+    // Delay must exceed animation duration (~250ms); scale with game speed
+    static const int trickClearDelays[] = {350, 800, 1200};
+    int delay = trickClearDelays[qBound(0, m_game->gameSpeed(), 2)];
+    QTimer::singleShot(delay, this, [this]() {
         emit trickCardsChanged();
     });
 }
@@ -618,6 +632,9 @@ void GameBridge::loadSettings() {
     int difficulty = settings.value("aiDifficulty", static_cast<int>(AIDifficulty::Medium)).toInt();
     m_game->setAIDifficulty(static_cast<AIDifficulty>(difficulty));
 
+    // Game speed
+    m_game->setGameSpeed(settings.value("gameSpeed", 1).toInt());
+
     // Game rules
     GameRules rules;
     rules.endScore = settings.value("rules/endScore", 100).toInt();
@@ -649,6 +666,7 @@ void GameBridge::saveSettings() {
     settings.setValue("cardScale", m_cardScale);
     settings.setValue("soundEnabled", m_soundEnabled);
     settings.setValue("aiDifficulty", static_cast<int>(m_game->aiDifficulty()));
+    settings.setValue("gameSpeed", m_game->gameSpeed());
 
     // Game rules
     const GameRules& rules = m_game->rules();
