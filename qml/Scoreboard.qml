@@ -7,10 +7,11 @@ Rectangle {
     property var playerData: gameBridge.players[playerIndex]
     property string playerName: playerData ? playerData.name : ""
     property int score: playerData ? playerData.score : 0
+    property int roundScore: playerData ? playerData.roundScore : 0
     property bool isCurrentPlayer: playerData ? playerData.isCurrentPlayer : false
 
     width: 100
-    height: 50
+    height: 60
     radius: 4
     color: isCurrentPlayer ? "#dc283c28" : "#c81e1e1e"
     border.color: isCurrentPlayer ? "#64ff64" : "#505050"
@@ -41,6 +42,13 @@ Rectangle {
             color: "#ffdc50"
             font.pixelSize: 14
             font.bold: true
+        }
+
+        Text {
+            visible: roundScore > 0
+            text: "+" + roundScore.toString()
+            color: "#ff9090"
+            font.pixelSize: 10
         }
     }
 }

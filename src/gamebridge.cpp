@@ -127,6 +127,7 @@ QVariantList GameBridge::players() const {
         QVariantMap playerMap;
         playerMap["name"] = p->name();
         playerMap["score"] = p->totalScore();
+        playerMap["roundScore"] = p->roundScore();
         playerMap["isCurrentPlayer"] = (i == m_currentPlayer);
         result.append(playerMap);
     }
