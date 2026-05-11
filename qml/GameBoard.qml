@@ -126,7 +126,7 @@ Item {
         x: Math.round((parent.width - width) / 2)
         anchors.top: parent.top
         anchors.topMargin: parent.height * 0.3
-        visible: gameBridge.passDirection < 3 && gameBridge.gameState === 3 // WaitingForPass
+        visible: gameBridge.isPassRound && gameBridge.isWaitingForPass
     }
 
     // Message banner

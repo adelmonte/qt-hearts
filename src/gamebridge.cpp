@@ -138,9 +138,17 @@ int GameBridge::passDirection() const {
     return static_cast<int>(m_passDirection);
 }
 
+bool GameBridge::isPassRound() const {
+    return m_passDirection != PassDirection::None;
+}
+
 int GameBridge::gameState() const {
     if (!m_game) return 0;
     return static_cast<int>(m_game->state());
+}
+
+bool GameBridge::isWaitingForPass() const {
+    return m_game && m_game->state() == GameState::WaitingForPass;
 }
 
 QString GameBridge::themePath() const {

@@ -19,6 +19,8 @@ class GameBridge : public QObject {
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
     Q_PROPERTY(int passDirection READ passDirection NOTIFY passDirectionChanged)
     Q_PROPERTY(int gameState READ gameState NOTIFY gameStateChanged)
+    Q_PROPERTY(bool isPassRound READ isPassRound NOTIFY passDirectionChanged)
+    Q_PROPERTY(bool isWaitingForPass READ isWaitingForPass NOTIFY gameStateChanged)
     Q_PROPERTY(bool inputBlocked READ inputBlocked NOTIFY inputBlockedChanged)
     Q_PROPERTY(int selectedCount READ selectedCount NOTIFY selectedCountChanged)
     Q_PROPERTY(bool gameOver READ gameOver NOTIFY gameOverChanged)
@@ -71,6 +73,8 @@ public:
     QString message() const { return m_message; }
     int passDirection() const;
     int gameState() const;
+    bool isPassRound() const;
+    bool isWaitingForPass() const;
     bool inputBlocked() const { return m_inputBlocked; }
     int selectedCount() const { return m_selectedCards.size(); }
     bool gameOver() const { return m_gameOver; }
