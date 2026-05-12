@@ -150,7 +150,6 @@ Item {
         property bool origQueenBreaks
         property bool origMoonProtect
         property bool origFullPolish
-        property bool origShowMenuBar
         property int origGameSpeed
 
         // Guard to prevent theme preview resets during control sync
@@ -184,11 +183,9 @@ Item {
             origQueenBreaks = gameBridge.queenBreaksHearts
             origMoonProtect = gameBridge.moonProtection
             origFullPolish = gameBridge.fullPolish
-            origShowMenuBar = gameBridge.showMenuBar
             origGameSpeed = gameBridge.gameSpeed
 
             // Sync controls
-            menuBarCheck.checked = gameBridge.showMenuBar
             cardScaleSlider.value = gameBridge.cardScale
             difficultyCombo.currentIndex = gameBridge.aiDifficulty
             speedCombo.currentIndex = gameBridge.gameSpeed
@@ -246,14 +243,11 @@ Item {
             gameBridge.fullPolish = fullPolishCheck.checked
 
             gameBridge.themePath = themeCombo.model[themeCombo.currentIndex].path
-
-            gameBridge.showMenuBar = menuBarCheck.checked
         }
 
         onRejected: {
-            // Revert preview changes
+            // Revert live-preview changes
             if (gameBridge.cardScale !== origScale) gameBridge.cardScale = origScale
-            if (gameBridge.showMenuBar !== origShowMenuBar) gameBridge.showMenuBar = origShowMenuBar
         }
 
         GridLayout {
@@ -379,12 +373,6 @@ Item {
                         Layout.preferredWidth: 45
                         horizontalAlignment: Text.AlignRight
                     }
-                }
-
-                CheckBox {
-                    id: menuBarCheck
-                    text: qsTr("Show menu bar (Ctrl+M to toggle)")
-                    checked: gameBridge.showMenuBar
                 }
 
                 // Theme info
@@ -556,7 +544,7 @@ Item {
                 Layout.fillWidth: true
             }
             Label {
-                text: qsTr("Version 1.0")
+                text: qsTr("Version %1").arg(Qt.application.version)
                 Layout.alignment: Qt.AlignHCenter
                 color: "#888888"
             }

@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     Application app(argc, argv);
 
     app.setApplicationName("Hearts");
-    app.setApplicationVersion("1.0.4");
+    app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("Hearts");
     app.setWindowIcon(QIcon::fromTheme("qt-hearts", QIcon(":/data/icons/qt-hearts.svg")));
 
@@ -98,13 +98,18 @@ int main(int argc, char* argv[]) {
     });
     undoAction->setEnabled(gameBridge->undoAvailable());
     gameMenu->addSeparator();
+    QAction* prefsAction = gameMenu->addAction(QObject::tr("&Preferences..."), gameBridge, &GameBridge::openSettingsRequested);
+    prefsAction->setShortcut(QKeySequence("Ctrl+,"));
+    gameMenu->addSeparator();
     QAction* quitAction = gameMenu->addAction(QObject::tr("&Quit"), gameBridge, &GameBridge::quit);
     quitAction->setShortcut(QKeySequence("Ctrl+Q"));
 
     // View menu
     QMenu* viewMenu = menuBar->addMenu(QObject::tr("&View"));
-    viewMenu->addAction(QObject::tr("&Scores..."), gameBridge, &GameBridge::openScoresRequested);
-    viewMenu->addAction(QObject::tr("S&tatistics..."), gameBridge, &GameBridge::openStatisticsRequested);
+    QAction* scoresAction = viewMenu->addAction(QObject::tr("&Scores..."), gameBridge, &GameBridge::openScoresRequested);
+    scoresAction->setShortcut(QKeySequence("Ctrl+Shift+S"));
+    QAction* statsAction = viewMenu->addAction(QObject::tr("S&tatistics..."), gameBridge, &GameBridge::openStatisticsRequested);
+    statsAction->setShortcut(QKeySequence("Ctrl+Shift+T"));
     viewMenu->addSeparator();
     QAction* fullscreenAction = viewMenu->addAction(QObject::tr("&Fullscreen"));
     fullscreenAction->setShortcut(QKeySequence("F11"));
@@ -128,10 +133,6 @@ int main(int argc, char* argv[]) {
         menuBarAction->setChecked(gameBridge->showMenuBar());
     });
 
-    // Settings menu
-    QMenu* settingsMenu = menuBar->addMenu(QObject::tr("&Settings"));
-    settingsMenu->addAction(QObject::tr("&Preferences..."), gameBridge, &GameBridge::openSettingsRequested);
-
     // Help menu
     QMenu* helpMenu = menuBar->addMenu(QObject::tr("&Help"));
     helpMenu->addAction(QObject::tr("&About Hearts..."), gameBridge, &GameBridge::openAboutRequested);
@@ -145,9 +146,12 @@ int main(int argc, char* argv[]) {
     // Add all shortcut actions to the window so they work when menu bar is hidden
     mainWindow.addAction(newGameAction);
     mainWindow.addAction(undoAction);
+    mainWindow.addAction(prefsAction);
     mainWindow.addAction(quitAction);
     mainWindow.addAction(fullscreenAction);
     mainWindow.addAction(menuBarAction);
+    mainWindow.addAction(scoresAction);
+    mainWindow.addAction(statsAction);
 
     app.setMenuBarActivation(menuBar);
 
@@ -162,7 +166,6 @@ int main(int argc, char* argv[]) {
     };
     QObject::connect(gameMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
     QObject::connect(viewMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
-    QObject::connect(settingsMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
     QObject::connect(helpMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
 
     mainWindow.show();

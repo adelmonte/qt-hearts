@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(qt-hearts VERSION 1.0 LANGUAGES CXX)
+project(qt-hearts VERSION 1.0.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +35,7 @@ set(HEADERS
 add_executable(qt-hearts ${SOURCES} ${HEADERS})
 
 target_include_directories(qt-hearts PRIVATE include)
+target_compile_definitions(qt-hearts PRIVATE APP_VERSION="${PROJECT_VERSION}")
 target_link_libraries(qt-hearts Qt6::Widgets Qt6::Svg Qt6::Multimedia Qt6::Quick Qt6::QuickWidgets Qt6::QuickControls2)
 
 install(TARGETS qt-hearts DESTINATION bin)

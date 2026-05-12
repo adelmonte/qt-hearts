@@ -35,7 +35,7 @@ Rectangle {
 
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "New Game"
+            text: "New Game  (Ctrl+N)"
             font.pixelSize: 18
             onClicked: gameBridge.newGame()
 
