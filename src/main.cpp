@@ -98,9 +98,6 @@ int main(int argc, char* argv[]) {
     });
     undoAction->setEnabled(gameBridge->undoAvailable());
     gameMenu->addSeparator();
-    QAction* prefsAction = gameMenu->addAction(QObject::tr("&Preferences..."), gameBridge, &GameBridge::openSettingsRequested);
-    prefsAction->setShortcut(QKeySequence("Ctrl+,"));
-    gameMenu->addSeparator();
     QAction* quitAction = gameMenu->addAction(QObject::tr("&Quit"), gameBridge, &GameBridge::quit);
     quitAction->setShortcut(QKeySequence("Ctrl+Q"));
 
@@ -132,6 +129,11 @@ int main(int argc, char* argv[]) {
     QObject::connect(gameBridge, &GameBridge::showMenuBarChanged, menuBarAction, [menuBarAction, gameBridge]() {
         menuBarAction->setChecked(gameBridge->showMenuBar());
     });
+
+    // Settings menu
+    QMenu* settingsMenu = menuBar->addMenu(QObject::tr("&Settings"));
+    QAction* prefsAction = settingsMenu->addAction(QObject::tr("&Preferences..."), gameBridge, &GameBridge::openSettingsRequested);
+    prefsAction->setShortcut(QKeySequence("Ctrl+,"));
 
     // Help menu
     QMenu* helpMenu = menuBar->addMenu(QObject::tr("&Help"));
@@ -166,6 +168,7 @@ int main(int argc, char* argv[]) {
     };
     QObject::connect(gameMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
     QObject::connect(viewMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
+    QObject::connect(settingsMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
     QObject::connect(helpMenu, &QMenu::aboutToHide, hideMenuIfNeeded);
 
     mainWindow.show();

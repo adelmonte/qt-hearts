@@ -306,6 +306,7 @@ Item {
                     radius: 6
                     border.color: "#444444"
                     border.width: 1
+                    clip: true
 
                     Item {
                         anchors.centerIn: parent
